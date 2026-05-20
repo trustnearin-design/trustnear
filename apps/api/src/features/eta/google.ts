@@ -19,6 +19,9 @@ const ENDPOINT = 'https://maps.googleapis.com/maps/api/distancematrix/json';
 
 interface DistanceMatrixResponse {
   status: string;
+  // Google sometimes includes a human-readable hint here ("enable Billing",
+  // "API not enabled", etc) — we surface it in logs so misconfig is obvious.
+  error_message?: string;
   rows?: {
     elements: {
       status: string;
@@ -52,7 +55,8 @@ export class GoogleMapsDistanceMatrixProvider implements EtaProvider {
       }
       const body = (await res.json()) as DistanceMatrixResponse;
       if (body.status !== 'OK' || !body.rows?.[0]?.elements?.[0]) {
-        throw new Error(`Google status: ${body.status}`);
+        const hint = body.error_message ? ` — ${body.error_message}` : '';
+        throw new Error(`Google status: ${body.status}${hint}`);
       }
       const element = body.rows[0].elements[0];
       if (element.status !== 'OK' || !element.duration || !element.distance) {
