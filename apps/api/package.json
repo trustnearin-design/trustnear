@@ -23,6 +23,7 @@
     "@sevalink/utils": "workspace:*",
     "hono": "^4.6.0",
     "ioredis": "^5.4.2",
+    "jose": "^5.9.0",
     "pino": "^9.5.0",
     "pino-pretty": "^13.0.0",
     "zod": "^4.0.0"
