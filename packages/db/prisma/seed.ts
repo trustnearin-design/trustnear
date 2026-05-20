@@ -135,6 +135,14 @@ const appConfig = [
     description: 'Categories shown on customer homepage',
     isPublic: true,
   },
+  {
+    key: 'payment_provider',
+    value: 'cashfree',
+    description:
+      'Active payment gateway. Change to switch live (cashfree/razorpay/stripe/mock). ' +
+      'Credentials must already be in env for the new provider.',
+    isPublic: false,
+  },
 ];
 
 async function main(): Promise<void> {

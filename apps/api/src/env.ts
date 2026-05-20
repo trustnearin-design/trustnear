@@ -48,6 +48,16 @@ const EnvSchema = z.object({
 
   GOOGLE_MAPS_API_KEY: emptyToUndefined,
 
+  // Payment gateway — swappable. Default + override via app_config.payment_provider
+  PAYMENT_PROVIDER: z.enum(['cashfree', 'razorpay', 'stripe', 'mock']).default('cashfree'),
+
+  // Cashfree
+  CASHFREE_ENV: z.enum(['sandbox', 'production']).default('sandbox'),
+  CASHFREE_APP_ID: emptyToUndefined,
+  CASHFREE_SECRET_KEY: emptyToUndefined,
+  CASHFREE_WEBHOOK_SECRET: emptyToUndefined,
+
+  // Razorpay (kept as a future fallback)
   RAZORPAY_KEY_ID: emptyToUndefined,
   RAZORPAY_KEY_SECRET: emptyToUndefined,
   RAZORPAY_WEBHOOK_SECRET: emptyToUndefined,
