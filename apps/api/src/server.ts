@@ -1,10 +1,12 @@
 import { serve } from '@hono/node-server';
 import * as Sentry from '@sentry/node';
 import { prisma } from '@sevalink/db';
+import type { Server as HTTPServer } from 'node:http';
 import { env } from './env.js';
 import { logger } from './logger.js';
 import { redis } from './redis.js';
 import { createApp } from './app.js';
+import { createSocketServer } from './sockets/server.js';
 
 // ─── Sentry — initialize before anything else if DSN configured ──────
 if (env.SENTRY_DSN) {
@@ -31,6 +33,16 @@ const server = serve(
   },
 );
 
+// ─── Attach Socket.IO to the same HTTP server ────────────────────────
+let socketCleanup: (() => Promise<void>) | null = null;
+try {
+  const { cleanup } = await createSocketServer(server as unknown as HTTPServer);
+  socketCleanup = cleanup;
+  logger.info('🔌 socket.io attached on the same port');
+} catch (err) {
+  logger.error({ err }, 'socket.io setup failed — REST API still up');
+}
+
 // ─── Graceful shutdown ───────────────────────────────────────────────
 let shuttingDown = false;
 async function shutdown(signal: string): Promise<void> {
@@ -38,14 +50,21 @@ async function shutdown(signal: string): Promise<void> {
   shuttingDown = true;
   logger.info({ signal }, 'shutting down…');
 
-  // Stop accepting new connections
+  // 1. Close socket connections first so clients get a clean disconnect signal
+  if (socketCleanup) {
+    await socketCleanup().catch((err: unknown) => {
+      logger.error({ err }, 'error closing socket.io');
+    });
+  }
+
+  // 2. Stop accepting new HTTP connections
   await new Promise<void>((resolve, reject) => {
     server.close((err) => (err ? reject(err) : resolve()));
   }).catch((err: unknown) => {
     logger.error({ err }, 'error closing http server');
   });
 
-  // Drain external connections
+  // 3. Drain external connections
   await Promise.allSettled([
     prisma.$disconnect().catch((err: unknown) => {
       logger.error({ err }, 'error disconnecting prisma');

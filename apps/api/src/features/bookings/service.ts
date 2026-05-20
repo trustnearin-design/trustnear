@@ -8,6 +8,7 @@ import {
 } from '@sevalink/types';
 import { generateBookingNumber, generateOtp, sha256, timingSafeEqual } from '@sevalink/utils';
 import { logger } from '../../logger.js';
+import { broadcastBookingStatus } from '../../sockets/broadcaster.js';
 import { findNearbyPros } from '../pros/service.js';
 import { calculatePrice } from './pricing.js';
 import { assertTransition, isTerminal } from './state-machine.js';
@@ -153,6 +154,9 @@ export async function createBooking(input: CreateBookingInput): Promise<{
     'booking created',
   );
 
+  // Broadcast initial status so connected clients see immediately
+  broadcastBookingStatus(booking.id, booking.status);
+
   return {
     bookingId: booking.id,
     bookingNumber: booking.bookingNumber,
@@ -225,6 +229,8 @@ export async function transitionBooking(args: {
     },
     'booking status changed',
   );
+
+  broadcastBookingStatus(updated.id, updated.status);
 
   return updated;
 }
@@ -309,6 +315,7 @@ export async function verifyBookingOtp(args: {
   });
 
   logger.info({ bookingId: updated.id }, 'booking otp verified — in_progress');
+  broadcastBookingStatus(updated.id, updated.status);
   return updated;
 }
 
