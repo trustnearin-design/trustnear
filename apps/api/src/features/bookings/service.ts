@@ -10,6 +10,12 @@ import { generateBookingNumber, generateOtp, sha256, timingSafeEqual } from '@se
 import { logger } from '../../logger.js';
 import { broadcastBookingStatus } from '../../sockets/broadcaster.js';
 import { findNearbyPros } from '../pros/service.js';
+import {
+  applyScoreEvent,
+  classifyPunctuality,
+  classifyResponseSpeed,
+  isRepeatBooking,
+} from '../trust-score/service.js';
 import { calculatePrice } from './pricing.js';
 import { assertTransition, isTerminal } from './state-machine.js';
 
@@ -183,6 +189,9 @@ export async function transitionBooking(args: {
       status: true,
       customerId: true,
       professionalId: true,
+      scheduledAt: true,
+      startedAt: true,
+      createdAt: true,
       professional: { select: { userId: true } },
     },
   });
@@ -230,9 +239,138 @@ export async function transitionBooking(args: {
     'booking status changed',
   );
 
+  // Fire trust score side-effects — never fail the user action if these throw.
+  await applyTransitionTrustEffects(booking, updated.status).catch((err: unknown) => {
+    logger.error({ err, bookingId: updated.id }, 'trust: post-transition effects failed');
+  });
+
   broadcastBookingStatus(updated.id, updated.status);
 
   return updated;
+}
+
+/**
+ * Fire trust-score events + maintain pro counters on key transitions.
+ *
+ *   matched → confirmed       fast_response or slow_response (response time)
+ *   * → completed             punctuality event + totalBookings++ + repeat check
+ *   * → cancelled_pro         cancellation_pro event + cancellationCount++
+ *
+ * Idempotency: each event has a single trigger path, so no dedup needed.
+ * Failures are logged but never surfaced — the user action still succeeds.
+ */
+async function applyTransitionTrustEffects(
+  prevBooking: {
+    id: string;
+    professionalId: string | null;
+    customerId: string;
+    scheduledAt: Date;
+    startedAt: Date | null;
+    createdAt: Date;
+  },
+  newStatus: BookingStatus,
+): Promise<void> {
+  if (!prevBooking.professionalId) return;
+  const proId = prevBooking.professionalId;
+
+  if (newStatus === 'confirmed') {
+    // Response time = createdAt (proxy for matched_at) → now
+    const event = classifyResponseSpeed(prevBooking.createdAt, new Date());
+    if (event) {
+      await applyScoreEvent({
+        professionalId: proId,
+        eventType: event,
+        bookingId: prevBooking.id,
+        metadata: {
+          responseSeconds: (Date.now() - prevBooking.createdAt.getTime()) / 1000,
+        },
+      });
+    }
+    // Maintain running average of accept time
+    await updateAvgResponseTime(proId, prevBooking.createdAt);
+    return;
+  }
+
+  if (newStatus === 'completed') {
+    // Increment totalBookings + maybe repeat
+    await prisma.professional.update({
+      where: { id: proId },
+      data: { totalBookings: { increment: 1 } },
+    });
+
+    const isRepeat = await isRepeatBooking({
+      customerId: prevBooking.customerId,
+      professionalId: proId,
+      excludeBookingId: prevBooking.id,
+    });
+    if (isRepeat) {
+      await prisma.professional.update({
+        where: { id: proId },
+        data: { repeatClientCount: { increment: 1 } },
+      });
+      await prisma.booking.update({
+        where: { id: prevBooking.id },
+        data: { isRepeatBooking: true },
+      });
+      await applyScoreEvent({
+        professionalId: proId,
+        eventType: 'repeat_booking',
+        bookingId: prevBooking.id,
+      });
+    }
+
+    // Punctuality — needs startedAt (OTP-verified moment)
+    if (prevBooking.startedAt) {
+      const event = classifyPunctuality(prevBooking.scheduledAt, prevBooking.startedAt);
+      if (event) {
+        await applyScoreEvent({
+          professionalId: proId,
+          eventType: event,
+          bookingId: prevBooking.id,
+          metadata: {
+            scheduledAt: prevBooking.scheduledAt.toISOString(),
+            startedAt: prevBooking.startedAt.toISOString(),
+            lateMinutes:
+              (prevBooking.startedAt.getTime() - prevBooking.scheduledAt.getTime()) / 60_000,
+          },
+        });
+      }
+    }
+    return;
+  }
+
+  if (newStatus === 'cancelled_pro') {
+    await prisma.professional.update({
+      where: { id: proId },
+      data: { cancellationCount: { increment: 1 } },
+    });
+    await applyScoreEvent({
+      professionalId: proId,
+      eventType: 'cancellation_pro',
+      bookingId: prevBooking.id,
+    });
+  }
+}
+
+async function updateAvgResponseTime(proId: string, matchedAt: Date): Promise<void> {
+  const responseSeconds = Math.round((Date.now() - matchedAt.getTime()) / 1000);
+  const pro = await prisma.professional.findUnique({
+    where: { id: proId },
+    select: { avgResponseTimeSeconds: true, totalBookings: true },
+  });
+  if (!pro) return;
+
+  // Running average — totalBookings is incremented on completion, so here we use it
+  // as a sample count (close enough for MVP; perfectly-accurate stats would need
+  // a dedicated accept counter).
+  const sampleCount = Math.max(1, pro.totalBookings);
+  const newAvg = Math.round(
+    (pro.avgResponseTimeSeconds * (sampleCount - 1) + responseSeconds) / sampleCount,
+  );
+  await prisma.professional.update({
+    where: { id: proId },
+    data: { avgResponseTimeSeconds: newAvg },
+  });
 }
 
 function enforceRoleForTransition(
