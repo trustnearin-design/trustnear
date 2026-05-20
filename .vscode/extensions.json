@@ -1,0 +1,22 @@
+{
+  "recommendations": [
+    "dbaeumer.vscode-eslint",
+    "esbenp.prettier-vscode",
+    "editorconfig.editorconfig",
+    "bradlc.vscode-tailwindcss",
+    "Prisma.prisma",
+    "GitHub.vscode-pull-request-github",
+    "eamodio.gitlens",
+    "msjsdiag.vscode-react-native",
+    "expo.vscode-expo-tools",
+    "usernamehw.errorlens",
+    "yoavbls.pretty-ts-errors",
+    "streetsidesoftware.code-spell-checker",
+    "rangav.vscode-thunder-client",
+    "ckolkman.vscode-postgres",
+    "redhat.vscode-yaml",
+    "Gruntfuggly.todo-tree",
+    "formulahendry.auto-rename-tag",
+    "christian-kohler.path-intellisense"
+  ]
+}

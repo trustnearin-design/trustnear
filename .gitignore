@@ -1,0 +1,73 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+dist/
+build/
+out/
+.next/
+.expo/
+.expo-shared/
+*.tsbuildinfo
+
+# Turborepo
+.turbo/
+
+# Environment files (NEVER commit secrets)
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.idea/
+*.swp
+*.swo
+*.sublime-*
+
+# Test coverage
+coverage/
+*.lcov
+.nyc_output/
+
+# Cache
+.cache/
+.eslintcache
+.prettiercache
+.parcel-cache/
+
+# Misc
+*.pem
+*.local
+
+# Native build artifacts
+*.keystore
+*.jks
+google-services.json
+GoogleService-Info.plist
+
+# Mobile build outputs
+ios/Pods/
+android/.gradle/
+android/app/build/
+android/build/
+*.ipa
+*.apk
+*.aab
+
+# Prisma
+**/prisma/migrations/dev/

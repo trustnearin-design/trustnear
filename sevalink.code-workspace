@@ -1,0 +1,21 @@
+{
+  "folders": [
+    { "name": "🏠 root", "path": "." },
+    { "name": "🔧 api", "path": "apps/api" },
+    { "name": "📱 customer", "path": "apps/customer" },
+    { "name": "🛠️ pro", "path": "apps/pro" },
+    { "name": "⚙️ admin", "path": "apps/admin" },
+    { "name": "📦 packages", "path": "packages" }
+  ],
+  "settings": {
+    "typescript.tsdk": "node_modules/typescript/lib"
+  },
+  "extensions": {
+    "recommendations": [
+      "dbaeumer.vscode-eslint",
+      "esbenp.prettier-vscode",
+      "Prisma.prisma",
+      "expo.vscode-expo-tools"
+    ]
+  }
+}
