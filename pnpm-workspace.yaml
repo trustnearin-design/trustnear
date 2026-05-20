@@ -1,3 +1,12 @@
 packages:
   - 'apps/*'
   - 'packages/*'
+
+# Approve install scripts for trusted dependencies.
+# pnpm disables postinstall scripts by default for security — these are
+# essential native builds (Prisma engines, esbuild binary).
+allowBuilds:
+  '@prisma/client': true
+  '@prisma/engines': true
+  prisma: true
+  esbuild: true

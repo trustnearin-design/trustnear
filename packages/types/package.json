@@ -1,0 +1,34 @@
+{
+  "name": "@sevalink/types",
+  "version": "0.0.1",
+  "private": true,
+  "description": "SEVALINK shared types — Zod schemas, error codes, domain types",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "dev": "tsc -p tsconfig.build.json --watch",
+    "clean": "rimraf dist .turbo",
+    "lint": "eslint src",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@sevalink/eslint-config": "workspace:*",
+    "@sevalink/tsconfig": "workspace:*",
+    "rimraf": "^6.0.1",
+    "typescript": "^5.7.0"
+  }
+}

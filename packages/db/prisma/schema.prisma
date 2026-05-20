@@ -1,0 +1,677 @@
+// ═══════════════════════════════════════════════════════════════════════
+// SEVALINK — Production-grade Prisma schema
+// PostgreSQL 16 (Neon serverless) · PostGIS for geo queries
+// Design principles:
+//   • Soft deletes on user-facing tables (deleted_at)
+//   • Audit trail on every mutation (AuditLog table)
+//   • Idempotency on all writes (IdempotencyKey table)
+//   • All time fields are timestamptz; all currency in INR paise (Int)
+//   • Geo coords as Decimal — PostGIS columns added via raw SQL migrations
+// ═══════════════════════════════════════════════════════════════════════
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions", "fullTextSearchPostgres"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  directUrl  = env("DIRECT_URL")
+  extensions = [pgcrypto, postgis, pg_trgm]
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// ENUMS
+// ═══════════════════════════════════════════════════════════════════════
+
+enum UserRole {
+  customer
+  professional
+  admin
+}
+
+enum ProAvailability {
+  online
+  offline
+  busy
+}
+
+enum TrustBadge {
+  none
+  bronze
+  silver
+  gold
+  platinum
+}
+
+enum SubscriptionPlan {
+  free
+  basic
+  pro
+  premium
+}
+
+enum PriceUnit {
+  per_hour
+  per_visit
+  per_day
+  fixed
+}
+
+enum BookingStatus {
+  pending_match
+  matched
+  confirmed
+  pro_en_route
+  otp_verified
+  in_progress
+  completed
+  cancelled_customer
+  cancelled_pro
+  disputed
+}
+
+enum PaymentStatus {
+  pending
+  paid
+  refunded
+  partial_refund
+  failed
+}
+
+enum PaymentMethod {
+  upi
+  card
+  wallet
+  cash
+  sevalink_wallet
+}
+
+enum TrustEventType {
+  on_time_arrival
+  late_arrival
+  positive_review
+  negative_review
+  repeat_booking
+  cancellation_pro
+  cancellation_customer
+  fast_response
+  slow_response
+  profile_complete
+  aadhaar_verified
+  police_verified
+}
+
+enum MessageType {
+  text
+  image
+  audio
+  location
+  system
+}
+
+enum NotificationType {
+  booking_created
+  booking_matched
+  booking_confirmed
+  booking_status
+  payment_received
+  payment_failed
+  promo
+  trust_score_change
+  review_received
+  system
+}
+
+enum WalletTxnType {
+  credit
+  debit
+  hold
+  release
+  refund
+}
+
+enum WalletTxnReason {
+  booking_payment
+  pro_payout
+  referral_reward
+  loyalty_redeem
+  promo_credit
+  wallet_topup
+  refund
+  adjustment
+}
+
+enum PromoDiscountType {
+  flat
+  percent
+}
+
+enum SupportTicketStatus {
+  open
+  in_progress
+  resolved
+  closed
+}
+
+enum SupportTicketType {
+  booking_issue
+  payment_issue
+  pro_complaint
+  customer_complaint
+  account
+  other
+}
+
+enum AuditAction {
+  create
+  update
+  delete
+  soft_delete
+  restore
+  login
+  logout
+  permission_change
+  config_change
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// CORE: User + Professional
+// ═══════════════════════════════════════════════════════════════════════
+
+model User {
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  phone           String    @unique @db.VarChar(15)
+  email           String?   @unique @db.VarChar(255)
+  fullName        String    @map("full_name") @db.VarChar(100)
+  role            UserRole
+  profilePhoto    String?   @map("profile_photo")
+  city            String    @default("Jaipur") @db.VarChar(50)
+  area            String?   @db.VarChar(100)
+  latitude        Decimal?  @db.Decimal(10, 8)
+  longitude       Decimal?  @db.Decimal(11, 8)
+  isActive        Boolean   @default(true) @map("is_active")
+  isVerified      Boolean   @default(false) @map("is_verified")
+  deviceToken     String?   @map("device_token")
+  preferredLang   String    @default("hi") @map("preferred_lang") @db.VarChar(10)
+  referralCode    String    @unique @map("referral_code") @db.VarChar(20)
+  referredById    String?   @map("referred_by") @db.Uuid
+  walletBalance   Int       @default(0) @map("wallet_balance") // paise
+  loyaltyPoints   Int       @default(0) @map("loyalty_points")
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz()
+  deletedAt       DateTime? @map("deleted_at") @db.Timestamptz()
+
+  // Relations
+  referredBy        User?                @relation("Referrals", fields: [referredById], references: [id])
+  referrals         User[]               @relation("Referrals")
+  professional      Professional?
+  customerBookings  Booking[]            @relation("CustomerBookings")
+  reviewsAuthored   Review[]             @relation("ReviewsAuthored")
+  chatMessages      ChatMessage[]
+  notifications     Notification[]
+  walletTxns        WalletTransaction[]
+  supportTickets    SupportTicket[]
+  auditLogs         AuditLog[]
+  savedAddresses    SavedAddress[]
+
+  @@index([phone])
+  @@index([role])
+  @@index([city, area])
+  @@index([referralCode])
+  @@map("users")
+}
+
+model Professional {
+  id                       String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId                   String            @unique @map("user_id") @db.Uuid
+  professionalTitle        String?           @map("professional_title") @db.VarChar(100)
+  bio                      String?
+  yearsExperience          Int               @default(0) @map("years_experience") @db.SmallInt
+  trustScore               Decimal           @default(0) @map("trust_score") @db.Decimal(4, 1)
+  trustBadge               TrustBadge        @default(none) @map("trust_badge")
+  availabilityStatus       ProAvailability   @default(offline) @map("availability_status")
+  // KYC
+  aadhaarNumberEncrypted   String?           @map("aadhaar_number_encrypted") // AES-encrypted
+  aadhaarVerified          Boolean           @default(false) @map("aadhaar_verified")
+  faceVerified             Boolean           @default(false) @map("face_verified")
+  bankVerified             Boolean           @default(false) @map("bank_verified")
+  policeVerified           Boolean           @default(false) @map("police_verified")
+  // Payouts (Razorpay Route)
+  accountNumberEncrypted   String?           @map("account_number_encrypted")
+  ifscCode                 String?           @map("ifsc_code") @db.VarChar(15)
+  razorpayContactId        String?           @map("razorpay_contact_id") @db.VarChar(50)
+  razorpayFundId           String?           @map("razorpay_fund_id") @db.VarChar(50)
+  // Media
+  introVideoUrl            String?           @map("intro_video_url")
+  // Metrics (denormalized for read perf — kept in sync via triggers/jobs)
+  totalBookings            Int               @default(0) @map("total_bookings")
+  repeatClientCount        Int               @default(0) @map("repeat_client_count")
+  cancellationCount        Int               @default(0) @map("cancellation_count")
+  avgResponseTimeSeconds   Int               @default(0) @map("avg_response_time_seconds")
+  // Subscription
+  isSubscriptionActive     Boolean           @default(false) @map("is_subscription_active")
+  subscriptionPlan         SubscriptionPlan  @default(free) @map("subscription_plan")
+  subscriptionExpiresAt    DateTime?         @map("subscription_expires_at") @db.Timestamptz()
+  createdAt                DateTime          @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt                DateTime          @updatedAt @map("updated_at") @db.Timestamptz()
+  deletedAt                DateTime?         @map("deleted_at") @db.Timestamptz()
+
+  user              User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  location          ProLocation?
+  schedules         ProSchedule[]
+  serviceOfferings  ProServiceOffering[]
+  bookings          Booking[]             @relation("ProBookings")
+  trustEvents       TrustScoreEvent[]
+  reviews           Review[]              @relation("ReviewsReceived")
+
+  @@index([trustScore(sort: Desc)])
+  @@index([availabilityStatus])
+  @@index([trustBadge])
+  @@map("professionals")
+}
+
+// Real-time GPS — split from professionals for write throughput (updates every 3s)
+model ProLocation {
+  professionalId  String   @id @map("professional_id") @db.Uuid
+  latitude        Decimal  @db.Decimal(10, 8)
+  longitude       Decimal  @db.Decimal(11, 8)
+  heading         Decimal? @db.Decimal(5, 2)
+  speedKmh        Decimal? @map("speed_kmh") @db.Decimal(5, 2)
+  accuracyMeters  Decimal? @map("accuracy_meters") @db.Decimal(6, 2)
+  updatedAt       DateTime @default(now()) @map("updated_at") @db.Timestamptz()
+
+  professional    Professional  @relation(fields: [professionalId], references: [id], onDelete: Cascade)
+
+  @@index([updatedAt])
+  @@map("pro_locations")
+}
+
+model ProSchedule {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  professionalId  String   @map("professional_id") @db.Uuid
+  dayOfWeek       Int      @map("day_of_week") @db.SmallInt // 0=Sun..6=Sat
+  startTime       String   @map("start_time") @db.VarChar(5) // "09:00"
+  endTime         String   @map("end_time") @db.VarChar(5)   // "20:00"
+  isAvailable     Boolean  @default(true) @map("is_available")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz()
+
+  professional    Professional @relation(fields: [professionalId], references: [id], onDelete: Cascade)
+
+  @@unique([professionalId, dayOfWeek])
+  @@map("pro_schedules")
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// SERVICES + OFFERINGS
+// ═══════════════════════════════════════════════════════════════════════
+
+model ServiceCategory {
+  id                 String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name               String     @db.VarChar(100)
+  slug               String     @unique @db.VarChar(100)
+  iconUrl            String?    @map("icon_url")
+  bannerUrl          String?    @map("banner_url")
+  professionalTitle  String?    @map("professional_title") @db.VarChar(100)
+  description        String?
+  basePrice          Int        @map("base_price") // paise
+  priceUnit          PriceUnit  @default(per_hour) @map("price_unit")
+  isActive           Boolean    @default(true) @map("is_active")
+  isFeatured         Boolean    @default(false) @map("is_featured")
+  phase              Int        @default(1) @db.SmallInt
+  sortOrder          Int        @default(0) @map("sort_order") @db.SmallInt
+  commissionRate     Decimal    @default(15.00) @map("commission_rate") @db.Decimal(4, 2)
+  minDurationMinutes Int        @default(60) @map("min_duration_minutes")
+  searchKeywords     String[]   @map("search_keywords")
+  createdAt          DateTime   @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt          DateTime   @updatedAt @map("updated_at") @db.Timestamptz()
+  deletedAt          DateTime?  @map("deleted_at") @db.Timestamptz()
+
+  offerings  ProServiceOffering[]
+  bookings   Booking[]
+
+  @@index([slug])
+  @@index([isActive, phase])
+  @@map("service_categories")
+}
+
+model ProServiceOffering {
+  id                 String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  professionalId     String    @map("professional_id") @db.Uuid
+  categoryId         String    @map("category_id") @db.Uuid
+  customPrice        Int?      @map("custom_price") // paise; null = use category default
+  experienceYears    Int       @default(0) @map("experience_years") @db.SmallInt
+  isActive           Boolean   @default(true) @map("is_active")
+  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+
+  professional  Professional      @relation(fields: [professionalId], references: [id], onDelete: Cascade)
+  category      ServiceCategory   @relation(fields: [categoryId], references: [id])
+
+  @@unique([professionalId, categoryId])
+  @@index([categoryId, isActive])
+  @@map("pro_service_offerings")
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// BOOKINGS
+// ═══════════════════════════════════════════════════════════════════════
+
+model Booking {
+  id                  String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  bookingNumber       String          @unique @map("booking_number") @db.VarChar(20)
+  customerId          String          @map("customer_id") @db.Uuid
+  professionalId      String?         @map("professional_id") @db.Uuid
+  categoryId          String          @map("category_id") @db.Uuid
+  status              BookingStatus   @default(pending_match)
+
+  scheduledAt         DateTime        @map("scheduled_at") @db.Timestamptz()
+  startedAt           DateTime?       @map("started_at") @db.Timestamptz()
+  completedAt         DateTime?       @map("completed_at") @db.Timestamptz()
+
+  // Address snapshot (don't reference SavedAddress — addresses can change)
+  addressLine         String          @map("address_line")
+  addressLat          Decimal         @map("address_lat") @db.Decimal(10, 8)
+  addressLng          Decimal         @map("address_lng") @db.Decimal(11, 8)
+  addressArea         String?         @map("address_area") @db.VarChar(100)
+  addressCity         String          @default("Jaipur") @map("address_city") @db.VarChar(50)
+
+  // OTP (encrypted; expires after use)
+  otpCodeHash         String?         @map("otp_code_hash") @db.VarChar(255)
+  otpExpiresAt        DateTime?       @map("otp_expires_at") @db.Timestamptz()
+
+  durationMinutes     Int             @default(60) @map("duration_minutes")
+
+  // Pricing (all paise)
+  basePrice           Int             @map("base_price")
+  platformFee         Int             @default(0) @map("platform_fee") // safety fee
+  promoDiscount       Int             @default(0) @map("promo_discount")
+  commission          Int             @default(0)
+  totalAmount         Int             @map("total_amount")
+  proPayout           Int             @default(0) @map("pro_payout")
+
+  // Payment
+  paymentStatus       PaymentStatus   @default(pending) @map("payment_status")
+  paymentMethod       PaymentMethod?  @map("payment_method")
+  razorpayOrderId     String?         @map("razorpay_order_id") @db.VarChar(100)
+  razorpayPaymentId   String?         @map("razorpay_payment_id") @db.VarChar(100)
+
+  notes               String?
+  cancellationReason  String?         @map("cancellation_reason")
+  isRepeatBooking     Boolean         @default(false) @map("is_repeat_booking")
+  promoCodeId         String?         @map("promo_code_id") @db.Uuid
+
+  createdAt           DateTime        @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt           DateTime        @updatedAt @map("updated_at") @db.Timestamptz()
+  deletedAt           DateTime?       @map("deleted_at") @db.Timestamptz()
+
+  customer       User             @relation("CustomerBookings", fields: [customerId], references: [id])
+  professional   Professional?    @relation("ProBookings", fields: [professionalId], references: [id])
+  category       ServiceCategory  @relation(fields: [categoryId], references: [id])
+  promoCode      PromoCode?       @relation(fields: [promoCodeId], references: [id])
+  review         Review?
+  chatMessages   ChatMessage[]
+  trustEvents    TrustScoreEvent[]
+  supportTickets SupportTicket[]
+
+  @@index([customerId, createdAt(sort: Desc)])
+  @@index([professionalId, scheduledAt])
+  @@index([status])
+  @@index([scheduledAt])
+  @@index([bookingNumber])
+  @@map("bookings")
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// TRUST + REVIEWS
+// ═══════════════════════════════════════════════════════════════════════
+
+model TrustScoreEvent {
+  id              String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  professionalId  String          @map("professional_id") @db.Uuid
+  bookingId       String?         @map("booking_id") @db.Uuid
+  eventType       TrustEventType  @map("event_type")
+  scoreDelta      Decimal         @map("score_delta") @db.Decimal(4, 1)
+  scoreBefore     Decimal         @map("score_before") @db.Decimal(4, 1)
+  scoreAfter      Decimal         @map("score_after") @db.Decimal(4, 1)
+  metadata        Json?
+  createdAt       DateTime        @default(now()) @map("created_at") @db.Timestamptz()
+
+  professional Professional @relation(fields: [professionalId], references: [id], onDelete: Cascade)
+  booking      Booking?     @relation(fields: [bookingId], references: [id])
+
+  @@index([professionalId, createdAt(sort: Desc)])
+  @@map("trust_score_events")
+}
+
+model Review {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  bookingId        String   @unique @map("booking_id") @db.Uuid
+  customerId       String   @map("customer_id") @db.Uuid
+  professionalId   String   @map("professional_id") @db.Uuid
+  rating           Int      @db.SmallInt
+  reviewText       String?  @map("review_text")
+  tags             String[]
+  isPublic         Boolean  @default(true) @map("is_public")
+  sentimentScore   Decimal? @map("sentiment_score") @db.Decimal(3, 2)
+  helpfulCount     Int      @default(0) @map("helpful_count")
+  proResponse      String?  @map("pro_response")
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt        DateTime @updatedAt @map("updated_at") @db.Timestamptz()
+
+  booking      Booking      @relation(fields: [bookingId], references: [id])
+  customer     User         @relation("ReviewsAuthored", fields: [customerId], references: [id])
+  professional Professional @relation("ReviewsReceived", fields: [professionalId], references: [id])
+
+  @@index([professionalId, createdAt(sort: Desc)])
+  @@index([rating])
+  @@map("reviews")
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// COMMUNICATION
+// ═══════════════════════════════════════════════════════════════════════
+
+model ChatMessage {
+  id          String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  bookingId   String       @map("booking_id") @db.Uuid
+  senderId    String       @map("sender_id") @db.Uuid
+  type        MessageType  @default(text)
+  message     String
+  mediaUrl    String?      @map("media_url")
+  readAt      DateTime?    @map("read_at") @db.Timestamptz()
+  createdAt   DateTime     @default(now()) @map("created_at") @db.Timestamptz()
+
+  booking  Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  sender   User     @relation(fields: [senderId], references: [id])
+
+  @@index([bookingId, createdAt])
+  @@map("chat_messages")
+}
+
+model Notification {
+  id        String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String            @map("user_id") @db.Uuid
+  type      NotificationType
+  title     String            @db.VarChar(200)
+  body      String
+  data      Json?
+  isRead    Boolean           @default(false) @map("is_read")
+  readAt    DateTime?         @map("read_at") @db.Timestamptz()
+  createdAt DateTime          @default(now()) @map("created_at") @db.Timestamptz()
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead, createdAt(sort: Desc)])
+  @@map("notifications")
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// WALLET + PROMOS
+// ═══════════════════════════════════════════════════════════════════════
+
+model WalletTransaction {
+  id            String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId        String           @map("user_id") @db.Uuid
+  type          WalletTxnType
+  reason        WalletTxnReason
+  amount        Int              // paise — always positive; type determines direction
+  balanceAfter  Int              @map("balance_after")
+  referenceId   String?          @map("reference_id") // booking_id, payout_id, etc.
+  metadata      Json?
+  createdAt     DateTime         @default(now()) @map("created_at") @db.Timestamptz()
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([referenceId])
+  @@map("wallet_transactions")
+}
+
+model PromoCode {
+  id              String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code            String              @unique @db.VarChar(20)
+  description     String?
+  discountType    PromoDiscountType   @map("discount_type")
+  value           Int                 // paise (flat) or percent x100 (percent)
+  maxDiscount     Int?                @map("max_discount") // cap for percent discounts
+  minOrderAmount  Int                 @default(0) @map("min_order_amount")
+  usageLimit      Int?                @map("usage_limit")
+  usageCount      Int                 @default(0) @map("usage_count")
+  perUserLimit    Int                 @default(1) @map("per_user_limit")
+  isActive        Boolean             @default(true) @map("is_active")
+  validFrom       DateTime            @map("valid_from") @db.Timestamptz()
+  validUntil      DateTime            @map("valid_until") @db.Timestamptz()
+  createdAt       DateTime            @default(now()) @map("created_at") @db.Timestamptz()
+
+  bookings Booking[]
+
+  @@index([code])
+  @@index([isActive, validUntil])
+  @@map("promo_codes")
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// SUPPORT + B2B + CONFIG
+// ═══════════════════════════════════════════════════════════════════════
+
+model SupportTicket {
+  id          String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  ticketNumber String               @unique @map("ticket_number") @db.VarChar(20)
+  userId      String                @map("user_id") @db.Uuid
+  bookingId   String?               @map("booking_id") @db.Uuid
+  type        SupportTicketType
+  status      SupportTicketStatus   @default(open)
+  subject     String                @db.VarChar(200)
+  messages    Json                  @default("[]") // array of {sender, message, ts}
+  assignedTo  String?               @map("assigned_to") @db.Uuid
+  resolvedAt  DateTime?             @map("resolved_at") @db.Timestamptz()
+  createdAt   DateTime              @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt   DateTime              @updatedAt @map("updated_at") @db.Timestamptz()
+
+  user    User     @relation(fields: [userId], references: [id])
+  booking Booking? @relation(fields: [bookingId], references: [id])
+
+  @@index([userId, status])
+  @@index([status, createdAt])
+  @@map("support_tickets")
+}
+
+model SocietyContract {
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  societyName     String    @map("society_name") @db.VarChar(200)
+  area            String    @db.VarChar(100)
+  city            String    @default("Jaipur") @db.VarChar(50)
+  contactName     String    @map("contact_name") @db.VarChar(100)
+  contactPhone    String    @map("contact_phone") @db.VarChar(15)
+  monthlyValue    Int       @map("monthly_value") // paise
+  services        String[]  // category slugs
+  contractStart   DateTime  @map("contract_start") @db.Timestamptz()
+  contractEnd     DateTime? @map("contract_end") @db.Timestamptz()
+  isActive        Boolean   @default(true) @map("is_active")
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz()
+
+  @@index([city, area])
+  @@index([isActive])
+  @@map("society_contracts")
+}
+
+// Dynamic config — admin-managed key/value store. Drives prices, features, UI content.
+model AppConfig {
+  key         String   @id @db.VarChar(100)
+  value       Json
+  description String?
+  isPublic    Boolean  @default(false) @map("is_public") // exposed via public config API?
+  updatedBy   String?  @map("updated_by") @db.Uuid
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz()
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  @@index([isPublic])
+  @@map("app_config")
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// ADVANCED-MODE ADDITIONS (beyond blueprint)
+// ═══════════════════════════════════════════════════════════════════════
+
+// Audit log — every meaningful mutation tracked (compliance + debugging)
+model AuditLog {
+  id          String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  actorId     String?      @map("actor_id") @db.Uuid
+  actorRole   UserRole?    @map("actor_role")
+  action      AuditAction
+  entity      String       @db.VarChar(50)  // table name
+  entityId    String?      @map("entity_id") @db.VarChar(100)
+  before      Json?        // state before change
+  after       Json?        // state after change
+  ipAddress   String?      @map("ip_address") @db.VarChar(50)
+  userAgent   String?      @map("user_agent")
+  metadata    Json?
+  createdAt   DateTime     @default(now()) @map("created_at") @db.Timestamptz()
+
+  actor User? @relation(fields: [actorId], references: [id])
+
+  @@index([entity, entityId])
+  @@index([actorId, createdAt(sort: Desc)])
+  @@index([action, createdAt(sort: Desc)])
+  @@map("audit_logs")
+}
+
+// Idempotency keys — prevent duplicate POST processing (payment safety)
+model IdempotencyKey {
+  key         String    @id @db.VarChar(255)
+  userId      String?   @map("user_id") @db.Uuid
+  endpoint    String    @db.VarChar(200)
+  requestHash String    @map("request_hash") @db.VarChar(64) // sha256 of body
+  responseStatus Int?   @map("response_status")
+  responseBody Json?    @map("response_body")
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+  expiresAt   DateTime  @map("expires_at") @db.Timestamptz()
+
+  @@index([userId, endpoint])
+  @@index([expiresAt])
+  @@map("idempotency_keys")
+}
+
+// Saved customer addresses (optional — bookings still snapshot the address)
+model SavedAddress {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId      String   @map("user_id") @db.Uuid
+  label       String   @db.VarChar(50) // "Home", "Office"
+  addressLine String   @map("address_line")
+  latitude    Decimal  @db.Decimal(10, 8)
+  longitude   Decimal  @db.Decimal(11, 8)
+  area        String?  @db.VarChar(100)
+  city        String   @default("Jaipur") @db.VarChar(50)
+  pincode     String?  @db.VarChar(10)
+  isDefault   Boolean  @default(false) @map("is_default")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz()
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isDefault])
+  @@map("saved_addresses")
+}

@@ -1,0 +1,53 @@
+{
+  "name": "@sevalink/db",
+  "version": "0.0.1",
+  "private": true,
+  "description": "SEVALINK database — Prisma schema, client, and migrations",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./client": {
+      "types": "./src/client.ts",
+      "default": "./src/client.ts"
+    }
+  },
+  "files": [
+    "src",
+    "prisma"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "dev": "tsc -p tsconfig.build.json --watch",
+    "clean": "rimraf dist .turbo",
+    "lint": "eslint src",
+    "typecheck": "tsc --noEmit",
+    "db:generate": "dotenv -e ../../.env.local -- prisma generate",
+    "db:push": "dotenv -e ../../.env.local -- prisma db push",
+    "db:migrate": "dotenv -e ../../.env.local -- prisma migrate dev",
+    "db:migrate:deploy": "dotenv -e ../../.env.local -- prisma migrate deploy",
+    "db:studio": "dotenv -e ../../.env.local -- prisma studio",
+    "db:seed": "dotenv -e ../../.env.local -- tsx prisma/seed.ts"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.2.0"
+  },
+  "devDependencies": {
+    "@sevalink/eslint-config": "workspace:*",
+    "@sevalink/tsconfig": "workspace:*",
+    "@types/node": "^22.10.0",
+    "dotenv": "^16.4.0",
+    "dotenv-cli": "^8.0.0",
+    "prisma": "^6.2.0",
+    "rimraf": "^6.0.1",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  }
+}

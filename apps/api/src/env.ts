@@ -1,0 +1,79 @@
+import { z } from 'zod';
+
+/**
+ * Normalize empty strings in optional fields to undefined.
+ * Without this, .env files that leave a value blank ("SENTRY_DSN=") fail .url()
+ * even though the operator clearly meant "not set."
+ */
+const emptyToUndefined = z
+  .string()
+  .transform((s) => (s.trim() === '' ? undefined : s))
+  .pipe(z.string().optional());
+
+const optionalUrl = z
+  .string()
+  .transform((s) => (s.trim() === '' ? undefined : s))
+  .pipe(z.string().url().optional());
+
+/**
+ * Env schema — single source of truth for env vars used by apps/api.
+ * Boot intentionally fails if anything required is missing/invalid:
+ * we'd rather crash early than discover at 3am that JWT_SECRET was unset.
+ */
+const EnvSchema = z.object({
+  NODE_ENV: z.enum(['development', 'test', 'staging', 'production']).default('development'),
+  PORT: z.coerce.number().int().positive().default(3000),
+  LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('debug'),
+
+  // Database
+  DATABASE_URL: z.string().url(),
+  DIRECT_URL: z.string().url().optional(),
+
+  // Redis
+  REDIS_URL: z.string().url(),
+
+  // Auth
+  JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 chars'),
+  JWT_REFRESH_SECRET: z.string().min(32, 'JWT_REFRESH_SECRET must be at least 32 chars'),
+  JWT_ACCESS_EXPIRY: z.string().default('15m'),
+  JWT_REFRESH_EXPIRY: z.string().default('30d'),
+
+  // Sentry — optional in dev, recommended in prod
+  SENTRY_DSN: optionalUrl,
+
+  // Third-party — optional now, validated when the feature using them ships
+  MSG91_AUTH_KEY: emptyToUndefined,
+  MSG91_TEMPLATE_ID: emptyToUndefined,
+  MSG91_SENDER_ID: z.string().default('SEVAOTP'),
+
+  GOOGLE_MAPS_API_KEY: emptyToUndefined,
+
+  RAZORPAY_KEY_ID: emptyToUndefined,
+  RAZORPAY_KEY_SECRET: emptyToUndefined,
+  RAZORPAY_WEBHOOK_SECRET: emptyToUndefined,
+
+  AWS_REGION: z.string().default('ap-south-1'),
+  AWS_ACCESS_KEY_ID: emptyToUndefined,
+  AWS_SECRET_ACCESS_KEY: emptyToUndefined,
+  S3_BUCKET_MEDIA: emptyToUndefined,
+  CLOUDFRONT_DOMAIN: emptyToUndefined,
+
+  // URLs
+  API_BASE_URL: z.string().url().default('http://localhost:3000'),
+});
+
+function parseEnv(): z.infer<typeof EnvSchema> {
+  const result = EnvSchema.safeParse(process.env);
+  if (!result.success) {
+    const issues = result.error.issues
+      .map((i) => `  • ${i.path.join('.')}: ${i.message}`)
+      .join('\n');
+    // eslint-disable-next-line no-console
+    console.error(`\n❌ Invalid environment configuration:\n${issues}\n`);
+    process.exit(1);
+  }
+  return result.data;
+}
+
+export const env = parseEnv();
+export type Env = typeof env;
