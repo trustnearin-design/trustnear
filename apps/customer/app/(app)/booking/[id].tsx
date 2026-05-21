@@ -22,6 +22,8 @@ import {
   type BookingDetail,
   type BookingStatus,
 } from '../../../src/api/bookings';
+import { trackingConnLabel, useBookingTracking } from '../../../src/api/tracking';
+import { BookingMap, EtaBanner } from '../../../src/components/BookingMap';
 import { clearBookingOtp, getBookingOtp, saveBookingOtp } from '../../../src/lib/bookingOtp';
 import {
   bookingStatusLabel,
@@ -48,6 +50,7 @@ export default function BookingDetailScreen() {
   const { id, justBooked } = useLocalSearchParams<{ id: string; justBooked?: string }>();
   const { data, isPending, isError, isFetching, refetch } = useBookingDetail(id);
   const cancelMut = useCancelBooking();
+  const tracking = useBookingTracking(id);
   const [otp, setOtp] = useState<string | null>(null);
   const [showCancel, setShowCancel] = useState(false);
 
@@ -101,6 +104,35 @@ export default function BookingDetailScreen() {
         refreshControl={<RefreshControl refreshing={isFetching} onRefresh={() => void refetch()} />}
       >
         <StatusHero booking={data} justBooked={justBooked === '1'} />
+
+        {(data.status === 'pro_en_route' || data.status === 'in_progress') &&
+        data.addressLat &&
+        data.addressLng ? (
+          <View className="overflow-hidden">
+            <BookingMap
+              customer={{ lat: Number(data.addressLat), lng: Number(data.addressLng) }}
+              pro={
+                tracking.proLocation
+                  ? { lat: tracking.proLocation.latitude, lng: tracking.proLocation.longitude }
+                  : null
+              }
+            />
+            {tracking.proLocation ? (
+              <EtaBanner
+                etaText={tracking.proLocation.etaText}
+                distanceMeters={tracking.proLocation.distanceMeters}
+                provider={tracking.proLocation.provider}
+              />
+            ) : (
+              <View className="flex-row items-center bg-brand-900 px-4 py-3">
+                <ActivityIndicator color="#fff" />
+                <Text className="ml-3 flex-1 text-sm font-semibold text-ink-inverse">
+                  {trackingConnLabel(tracking)}
+                </Text>
+              </View>
+            )}
+          </View>
+        ) : null}
 
         {data.status === 'confirmed' || data.status === 'pro_en_route' ? (
           <OtpCard otp={otp} bookingId={data.id} onRegenerate={() => void refetch()} />

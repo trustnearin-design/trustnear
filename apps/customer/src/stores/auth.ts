@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
+import { disconnectSocket } from '../lib/socket';
 
 /**
  * Auth state strategy:
@@ -66,6 +67,7 @@ export const useAuthStore = create<AuthState>()(
 
       clearSession: async () => {
         const swallow = () => undefined;
+        disconnectSocket();
         await Promise.all([
           SecureStore.deleteItemAsync(ACCESS_KEY).catch(swallow),
           SecureStore.deleteItemAsync(REFRESH_KEY).catch(swallow),
