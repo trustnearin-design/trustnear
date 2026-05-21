@@ -1,0 +1,35 @@
+{
+  "expo": {
+    "name": "SEVALINK",
+    "slug": "sevalink-customer",
+    "scheme": "sevalink",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#0F172A"
+    },
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "in.sevalink.customer"
+    },
+    "android": {
+      "package": "in.sevalink.customer",
+      "adaptiveIcon": {
+        "backgroundColor": "#0F172A"
+      },
+      "edgeToEdgeEnabled": true
+    },
+    "plugins": ["expo-router", "expo-secure-store"],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "apiBaseUrl": "http://10.0.2.2:3000",
+      "apiBaseUrlDevice": "http://192.168.137.1:3000"
+    }
+  }
+}
