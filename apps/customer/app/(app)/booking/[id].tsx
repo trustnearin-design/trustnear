@@ -33,6 +33,8 @@ import {
   priceUnitLabel,
 } from '../../../src/lib/format';
 import { ApiCallError } from '../../../src/api/client';
+import { useCreatePaymentOrder, useVerifyPayment } from '../../../src/api/payments';
+import { startCashfreeWebPayment } from '../../../src/lib/cashfree';
 import { colors } from '../../../src/theme/colors';
 import { Avatar } from '../../../src/components/Avatar';
 
@@ -144,6 +146,19 @@ export default function BookingDetailScreen() {
 
         <DetailsCard booking={data} />
         <PriceCard booking={data} />
+
+        {data.status === 'completed' && data.paymentStatus !== 'paid' ? (
+          <PaymentCard booking={data} onPaid={() => void refetch()} />
+        ) : null}
+
+        {data.status === 'completed' && data.paymentStatus === 'paid' ? (
+          <View className="mx-5 mt-5 flex-row items-center rounded-card bg-success/10 p-4">
+            <Ionicons name="checkmark-circle" size={22} color={colors.success} />
+            <Text className="ml-2 flex-1 text-sm font-semibold text-success">
+              Paid {formatRupees(data.totalAmount)} · Thanks for using SEVALINK
+            </Text>
+          </View>
+        ) : null}
 
         {customerCanCancel(data.status) ? (
           <View className="mx-5 mt-5">
@@ -420,6 +435,90 @@ function PriceCard({ booking }: { booking: BookingDetail }) {
       <Text className="mt-1 text-[11px] text-ink-subtle">
         Payment status: {booking.paymentStatus}
       </Text>
+    </View>
+  );
+}
+
+function PaymentCard({ booking, onPaid }: { booking: BookingDetail; onPaid: () => void }) {
+  const createOrder = useCreatePaymentOrder();
+  const verify = useVerifyPayment();
+  const [error, setError] = useState<string | null>(null);
+  const inFlight = createOrder.isPending || verify.isPending;
+
+  const handlePay = async () => {
+    setError(null);
+    try {
+      const order = await createOrder.mutateAsync({ bookingId: booking.id });
+      const result = await startCashfreeWebPayment({
+        sessionId: order.paymentSessionId,
+        orderId: order.providerOrderId,
+        sandbox: __DEV__,
+      });
+      // Webhook usually wins the race, but verifying gives us instant UI
+      // feedback. Either path ends with paymentStatus === 'paid'.
+      const verifyRes = await verify.mutateAsync(booking.id);
+      if (verifyRes.status === 'paid') {
+        onPaid();
+        return;
+      }
+      if (!result.ok) {
+        setError(result.error?.message ?? 'Payment was not completed.');
+      } else {
+        // SDK said ok but backend hasn't reconciled yet — poll picks it up.
+        setError("Payment received. We're confirming with the bank…");
+      }
+    } catch (e) {
+      if (e instanceof ApiCallError) {
+        setError(e.message);
+      } else if (e instanceof Error) {
+        setError(
+          e.message.includes('CFPaymentGatewayService') ||
+            e.message.includes('Native module') ||
+            e.message.includes('TurboModule')
+            ? 'Payment requires the SEVALINK dev client app — re-install from the latest EAS build.'
+            : e.message,
+        );
+      } else {
+        setError('Could not start payment.');
+      }
+    }
+  };
+
+  return (
+    <View className="mx-5 mt-5 rounded-card bg-brand p-5">
+      <View className="flex-row items-center">
+        <Ionicons name="card" size={18} color="#fff" />
+        <Text className="ml-2 text-xs font-bold uppercase tracking-wider text-ink-inverse">
+          Payment due
+        </Text>
+      </View>
+      <Text className="mt-2 text-3xl font-black text-ink-inverse">
+        {formatRupees(booking.totalAmount)}
+      </Text>
+      <Text className="mt-1 text-xs text-ink-inverse/80">
+        Service complete. Pay securely via UPI, card, or netbanking.
+      </Text>
+      <Pressable
+        disabled={inFlight}
+        onPress={() => void handlePay()}
+        className={`mt-4 flex-row items-center justify-center rounded-card bg-accent py-3.5 ${
+          inFlight ? 'opacity-60' : ''
+        }`}
+      >
+        {inFlight ? (
+          <ActivityIndicator color="#fff" />
+        ) : (
+          <>
+            <Ionicons name="lock-closed" size={16} color="#fff" />
+            <Text className="ml-2 text-sm font-bold text-ink-inverse">
+              Pay {formatRupees(booking.totalAmount)}
+            </Text>
+          </>
+        )}
+      </Pressable>
+      {error ? (
+        <Text className="mt-3 text-center text-xs font-medium text-ink-inverse/90">{error}</Text>
+      ) : null}
     </View>
   );
 }

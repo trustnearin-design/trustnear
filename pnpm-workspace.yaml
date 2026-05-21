@@ -10,5 +10,9 @@ allowBuilds:
   '@prisma/engines': true
   prisma: true
   esbuild: true
+  # dtrace-provider is an optional native dep of bunyan (pulled in via eas-cli).
+  # It only builds on Solaris/macOS — skip on Linux (EAS builders) to avoid
+  # a non-zero exit code in `pnpm install --frozen-lockfile`.
+  dtrace-provider: false
 
 nodeLinker: hoisted

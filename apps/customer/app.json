@@ -21,7 +21,11 @@
       "adaptiveIcon": {
         "backgroundColor": "#0F172A"
       },
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "permissions": [
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION"
+      ]
     },
     "plugins": [
       "expo-router",
@@ -38,7 +42,12 @@
     },
     "extra": {
       "apiBaseUrl": "http://10.0.2.2:3000",
-      "apiBaseUrlDevice": "http://192.168.137.1:3000"
-    }
+      "apiBaseUrlDevice": "http://192.168.137.1:3000",
+      "router": {},
+      "eas": {
+        "projectId": "ae5c2d6c-25b1-4e34-8b4b-4e2fe72ccec8"
+      }
+    },
+    "owner": "techlenore"
   }
 }
