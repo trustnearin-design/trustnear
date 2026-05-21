@@ -53,11 +53,9 @@ export default function ProfileScreen() {
         </Section>
 
         <Section title="Coming soon">
-          <MenuRow icon="receipt-outline" label="My bookings" value="Phase 2c" muted />
-          <Divider />
           <MenuRow icon="wallet-outline" label="Wallet" value="Phase 2e" muted />
           <Divider />
-          <MenuRow icon="heart-outline" label="Saved experts" value="Phase 2c" muted />
+          <MenuRow icon="heart-outline" label="Saved experts" value="Later" muted />
           <Divider />
           <MenuRow icon="help-circle-outline" label="Help & support" value="Phase 5" muted />
         </Section>

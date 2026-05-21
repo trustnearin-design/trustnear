@@ -5,11 +5,10 @@ import {
   Pressable,
   ActivityIndicator,
   RefreshControl,
-  Alert,
   ImageBackground,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Stack, useLocalSearchParams } from 'expo-router';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useProDetail, type ProDetail, type ProReview } from '../../../src/api/discovery';
 import {
@@ -71,7 +70,7 @@ export default function ExpertDetailScreen() {
             <ReviewsSection pro={data} />
           </ScrollView>
 
-          <StickyBookBar />
+          <StickyBookBar expertId={id ?? ''} />
         </>
       )}
     </SafeAreaView>
@@ -314,14 +313,16 @@ function ReviewCard({ review }: { review: ProReview }) {
   );
 }
 
-function StickyBookBar() {
+function StickyBookBar({ expertId }: { expertId: string }) {
+  const router = useRouter();
   return (
     <View
       className="absolute bottom-0 left-0 right-0 border-t border-border bg-surface px-5 pb-6 pt-3"
       style={{ elevation: 8 }}
     >
       <Pressable
-        onPress={() => Alert.alert('Coming soon', 'Booking flow lands in Phase 2c.')}
+        disabled={!expertId}
+        onPress={() => router.push({ pathname: '/(app)/book/[expertId]', params: { expertId } })}
         className="flex-row items-center justify-center rounded-card bg-brand py-4"
       >
         <Ionicons name="calendar-outline" size={18} color="#fff" />

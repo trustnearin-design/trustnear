@@ -79,6 +79,56 @@ export function badgeColors(tier: string): { bg: string; text: string } {
 }
 
 /**
+ * Human-readable label + tone for each booking status.
+ */
+const BOOKING_STATUS_INFO: Record<
+  string,
+  { label: string; tone: 'info' | 'progress' | 'success' | 'danger' }
+> = {
+  pending_match: { label: 'Finding expert', tone: 'info' },
+  matched: { label: 'Expert matched', tone: 'info' },
+  confirmed: { label: 'Confirmed', tone: 'progress' },
+  pro_en_route: { label: 'Expert on the way', tone: 'progress' },
+  otp_verified: { label: 'Expert arrived', tone: 'progress' },
+  in_progress: { label: 'In progress', tone: 'progress' },
+  completed: { label: 'Completed', tone: 'success' },
+  cancelled_customer: { label: 'You cancelled', tone: 'danger' },
+  cancelled_pro: { label: 'Expert cancelled', tone: 'danger' },
+  disputed: { label: 'Disputed', tone: 'danger' },
+};
+
+export function bookingStatusLabel(status: string): string {
+  return BOOKING_STATUS_INFO[status]?.label ?? status;
+}
+
+export function bookingStatusTone(status: string): 'info' | 'progress' | 'success' | 'danger' {
+  return BOOKING_STATUS_INFO[status]?.tone ?? 'info';
+}
+
+/**
+ * Format an ISO datetime into a friendly "Today, 3:30 PM" / "Tomorrow,
+ * 10:00 AM" / "Tue, 14 May · 3:30 PM" string for booking schedule display.
+ */
+export function formatScheduledAt(iso: string): string {
+  const d = new Date(iso);
+  const now = new Date();
+  const sameDay = d.toDateString() === now.toDateString();
+  const tmrw = new Date(now);
+  tmrw.setDate(tmrw.getDate() + 1);
+  const isTomorrow = d.toDateString() === tmrw.toDateString();
+
+  const time = d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
+  if (sameDay) return `Today, ${time}`;
+  if (isTomorrow) return `Tomorrow, ${time}`;
+  const dayMonth = d.toLocaleDateString('en-IN', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+  });
+  return `${dayMonth} · ${time}`;
+}
+
+/**
  * Format seconds as "Xs", "Xm", or "Xh Ym" depending on magnitude.
  * Used for the pro's avg response time pill.
  */

@@ -10,6 +10,8 @@ export default function AppStackLayout() {
       <Stack.Screen name="(tabs)" />
       <Stack.Screen name="category/[slug]" options={{ headerShown: true, title: '' }} />
       <Stack.Screen name="pro/[id]" options={{ headerShown: true, title: '' }} />
+      <Stack.Screen name="book/[expertId]" options={{ headerShown: true, title: 'Book expert' }} />
+      <Stack.Screen name="booking/[id]" options={{ headerShown: true, title: '' }} />
     </Stack>
   );
 }

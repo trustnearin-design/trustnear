@@ -5,6 +5,17 @@ export interface UserCoords {
   lng: number;
 }
 
+export interface ResolvedAddress {
+  /** Sub-locality / neighbourhood — e.g. "Vaishali Nagar". */
+  area: string | null;
+  /** Wider city. */
+  city: string | null;
+  /** Indian PIN code. */
+  pincode: string | null;
+  /** Human-readable single line built from the available parts. */
+  formatted: string;
+}
+
 /**
  * Jaipur city center — used when permission is denied or GPS fails so the
  * Discovery screens can still show *something* useful in MVP.
@@ -24,4 +35,35 @@ export async function getCurrentCoords(): Promise<UserCoords | null> {
     accuracy: Location.Accuracy.Balanced,
   });
   return { lat: pos.coords.latitude, lng: pos.coords.longitude };
+}
+
+/**
+ * Reverse-geocode coordinates into a human-readable address using
+ * expo-location's native API (Android: Geocoder; iOS: CLGeocoder).
+ * Returns null if the platform geocoder fails — callers should let the
+ * user type their address manually in that case.
+ */
+export async function reverseGeocode(coords: UserCoords): Promise<ResolvedAddress | null> {
+  try {
+    const results = await Location.reverseGeocodeAsync({
+      latitude: coords.lat,
+      longitude: coords.lng,
+    });
+    const r = results[0];
+    if (!r) return null;
+
+    const area = r.district || r.subregion || r.name || null;
+    const city = r.city || r.region || null;
+    const pincode = r.postalCode || null;
+
+    const parts = [area, city, pincode].filter((x): x is string => !!x);
+    return {
+      area,
+      city,
+      pincode,
+      formatted: parts.join(', ') || 'Address unavailable',
+    };
+  } catch {
+    return null;
+  }
 }
