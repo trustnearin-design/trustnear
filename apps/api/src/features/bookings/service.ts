@@ -16,6 +16,12 @@ import {
   classifyResponseSpeed,
   isRepeatBooking,
 } from '../trust-score/service.js';
+import {
+  notifyBookingArrived,
+  notifyBookingCompleted,
+  notifyBookingEnRoute,
+  notifyBookingMatched,
+} from '../notifications/service.js';
 import { calculatePrice } from './pricing.js';
 import { assertTransition, isTerminal } from './state-machine.js';
 
@@ -244,9 +250,91 @@ export async function transitionBooking(args: {
     logger.error({ err, bookingId: updated.id }, 'trust: post-transition effects failed');
   });
 
+  // Fire push notifications — also best-effort, never blocks the action.
+  void applyTransitionNotifications(booking, updated.status).catch((err: unknown) => {
+    logger.error({ err, bookingId: updated.id }, 'notify: post-transition dispatch failed');
+  });
+
   broadcastBookingStatus(updated.id, updated.status);
 
   return updated;
+}
+
+/**
+ * Push-notify the customer on every state change they care about.
+ *
+ *   matched → confirmed       "X accepted your booking"
+ *   confirmed → pro_en_route  "Your expert is on the way"
+ *   * → otp_verified          "Your expert has arrived" (sent on otp_verified
+ *                              rather than at the geofence event because
+ *                              that's when the customer's UX needs the hint
+ *                              to share the OTP — and matches the state
+ *                              that actually proves arrival)
+ *   * → completed             "Service complete · Pay ₹X"
+ *
+ * Lookups are minimized to one row read for the pro name + booking number.
+ */
+async function applyTransitionNotifications(
+  prevBooking: {
+    id: string;
+    customerId: string;
+    professionalId: string | null;
+  },
+  newStatus: BookingStatus,
+): Promise<void> {
+  if (
+    newStatus !== 'confirmed' &&
+    newStatus !== 'pro_en_route' &&
+    newStatus !== 'otp_verified' &&
+    newStatus !== 'completed'
+  ) {
+    return;
+  }
+
+  const detail = await prisma.booking.findUnique({
+    where: { id: prevBooking.id },
+    select: {
+      bookingNumber: true,
+      totalAmount: true,
+      professional: { select: { user: { select: { fullName: true } } } },
+    },
+  });
+  if (!detail) return;
+  const proName = detail.professional?.user.fullName ?? 'Your expert';
+
+  if (newStatus === 'confirmed') {
+    await notifyBookingMatched({
+      customerId: prevBooking.customerId,
+      bookingId: prevBooking.id,
+      bookingNumber: detail.bookingNumber,
+      professionalName: proName,
+    });
+    return;
+  }
+  if (newStatus === 'pro_en_route') {
+    await notifyBookingEnRoute({
+      customerId: prevBooking.customerId,
+      bookingId: prevBooking.id,
+      professionalName: proName,
+    });
+    return;
+  }
+  if (newStatus === 'otp_verified') {
+    await notifyBookingArrived({
+      customerId: prevBooking.customerId,
+      bookingId: prevBooking.id,
+      professionalName: proName,
+    });
+    return;
+  }
+  if (newStatus === 'completed') {
+    await notifyBookingCompleted({
+      customerId: prevBooking.customerId,
+      bookingId: prevBooking.id,
+      bookingNumber: detail.bookingNumber,
+      amountPaise: detail.totalAmount,
+    });
+  }
 }
 
 /**

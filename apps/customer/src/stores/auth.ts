@@ -3,6 +3,7 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
 import { disconnectSocket } from '../lib/socket';
+import { unregisterPushTokenFromBackend } from '../lib/notifications';
 
 /**
  * Auth state strategy:
@@ -67,6 +68,9 @@ export const useAuthStore = create<AuthState>()(
 
       clearSession: async () => {
         const swallow = () => undefined;
+        // Unregister BEFORE we drop the token — backend needs auth on
+        // the DELETE call. Best-effort; we don't block logout on it.
+        await unregisterPushTokenFromBackend().catch(swallow);
         disconnectSocket();
         await Promise.all([
           SecureStore.deleteItemAsync(ACCESS_KEY).catch(swallow),

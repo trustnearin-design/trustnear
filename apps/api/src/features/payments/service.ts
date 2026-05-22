@@ -7,6 +7,7 @@ import {
   NotFoundError,
 } from '@sevalink/types';
 import { logger } from '../../logger.js';
+import { notifyPaymentReceived } from '../notifications/service.js';
 import { getPaymentProvider } from './factory.js';
 import type { WebhookEvent } from './provider.js';
 
@@ -232,6 +233,23 @@ async function markBookingPaid(args: {
     },
     'payments: booking marked paid',
   );
+
+  // Push-notify the customer (best effort — never blocks the payment flow).
+  void (async () => {
+    const detail = await prisma.booking.findUnique({
+      where: { id: args.bookingId },
+      select: { bookingNumber: true },
+    });
+    if (!detail) return;
+    await notifyPaymentReceived({
+      customerId: args.customerId,
+      bookingId: args.bookingId,
+      bookingNumber: detail.bookingNumber,
+      amountPaise: args.amountPaise,
+    });
+  })().catch((err: unknown) => {
+    logger.error({ err, bookingId: args.bookingId }, 'notify: payment-received dispatch failed');
+  });
 }
 
 function mapPaymentMethod(

@@ -14,6 +14,7 @@ import bookingsRoutes from './features/bookings/routes.js';
 import reviewsRoutes from './features/reviews/routes.js';
 import paymentsRoutes from './features/payments/routes.js';
 import walletRoutes from './features/wallet/routes.js';
+import notificationsRoutes from './features/notifications/routes.js';
 
 /**
  * App factory. Pure construction — boot/listen happens in server.ts.
@@ -49,6 +50,7 @@ export function createApp(): Hono<{ Variables: { requestId: string } }> {
   app.route('/api/v1/reviews', reviewsRoutes);
   app.route('/api/v1/payments', paymentsRoutes);
   app.route('/api/v1/wallet', walletRoutes);
+  app.route('/api/v1/notifications', notificationsRoutes);
 
   // Root
   app.get('/', (c) =>

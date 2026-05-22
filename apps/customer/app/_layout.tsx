@@ -7,7 +7,9 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import * as SplashScreen from 'expo-splash-screen';
+import * as Notifications from 'expo-notifications';
 import { bootstrapAuth, useAuthStore } from '../src/stores/auth';
+import { registerPushTokenWithBackend } from '../src/lib/notifications';
 
 const noop = () => undefined;
 SplashScreen.preventAutoHideAsync().catch(noop);
@@ -42,9 +44,48 @@ function useAuthRouteGuard(ready: boolean) {
   }, [ready, isAuthed, segments, router]);
 }
 
+/**
+ * Push notification side effects:
+ *   • Register the device's Expo push token with the backend whenever we
+ *     transition into the authed state (covers login + cold-start-with-
+ *     hydrated-auth). Idempotent on the backend.
+ *   • If the user kills the app and re-opens via a notification tap,
+ *     `getLastNotificationResponseAsync` returns it on mount — read it
+ *     once and deep-link to the booking detail.
+ *   • While running, `addNotificationResponseReceivedListener` fires on
+ *     every tap.
+ */
+function usePushNotifications(ready: boolean): void {
+  const isAuthed = useAuthStore((s) => s.isAuthed);
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!ready || !isAuthed) return;
+    void registerPushTokenWithBackend();
+  }, [ready, isAuthed]);
+
+  useEffect(() => {
+    if (!ready) return;
+    const handle = (response: Notifications.NotificationResponse) => {
+      const data = response.notification.request.content.data as
+        | { bookingId?: string; deepLink?: string }
+        | undefined;
+      if (data?.bookingId) {
+        router.push({ pathname: '/(app)/booking/[id]', params: { id: data.bookingId } });
+      }
+    };
+    void Notifications.getLastNotificationResponseAsync().then((r) => {
+      if (r) handle(r);
+    });
+    const sub = Notifications.addNotificationResponseReceivedListener(handle);
+    return () => sub.remove();
+  }, [ready, router]);
+}
+
 export default function RootLayout() {
   const [ready, setReady] = useState(false);
   useAuthRouteGuard(ready);
+  usePushNotifications(ready);
 
   useEffect(() => {
     bootstrapAuth()
