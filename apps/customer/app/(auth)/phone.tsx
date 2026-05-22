@@ -45,7 +45,7 @@ export default function PhoneScreen() {
         className="flex-1"
       >
         <View className="flex-1 px-6 pt-12">
-          <Text className="text-3xl font-bold text-ink">Welcome to SEVALINK</Text>
+          <Text className="text-3xl font-bold text-ink">Welcome to TrustNear</Text>
           <Text className="mt-2 text-base text-ink-muted">
             Verified pros for every home service. Enter your mobile to continue.
           </Text>
@@ -83,7 +83,7 @@ export default function PhoneScreen() {
           </Pressable>
 
           <Text className="mt-6 text-center text-xs text-ink-subtle">
-            By continuing you agree to SEVALINK&apos;s Terms &amp; Privacy Policy.
+            By continuing you agree to TrustNear&apos;s Terms &amp; Privacy Policy.
           </Text>
         </View>
       </KeyboardAvoidingView>

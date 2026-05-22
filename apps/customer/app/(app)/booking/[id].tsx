@@ -155,7 +155,7 @@ export default function BookingDetailScreen() {
           <View className="mx-5 mt-5 flex-row items-center rounded-card bg-success/10 p-4">
             <Ionicons name="checkmark-circle" size={22} color={colors.success} />
             <Text className="ml-2 flex-1 text-sm font-semibold text-success">
-              Paid {formatRupees(data.totalAmount)} · Thanks for using SEVALINK
+              Paid {formatRupees(data.totalAmount)} · Thanks for using TrustNear
             </Text>
           </View>
         ) : null}
@@ -475,7 +475,7 @@ function PaymentCard({ booking, onPaid }: { booking: BookingDetail; onPaid: () =
           e.message.includes('CFPaymentGatewayService') ||
             e.message.includes('Native module') ||
             e.message.includes('TurboModule')
-            ? 'Payment requires the SEVALINK dev client app — re-install from the latest EAS build.'
+            ? 'Payment requires the TrustNear dev client app — re-install from the latest EAS build.'
             : e.message,
         );
       } else {

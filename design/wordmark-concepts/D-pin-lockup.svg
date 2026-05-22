@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 220" width="720" height="220">
+  <rect width="720" height="220" fill="#FAFAF7"/>
+  <!-- Geometric pin mark (location + checkmark) -->
+  <g transform="translate(70,55)">
+    <!-- Pin shape -->
+    <path d="M 35 0 Q 70 0, 70 35 Q 70 55, 35 100 Q 0 55, 0 35 Q 0 0, 35 0 Z" fill="#0B1F3A"/>
+    <!-- Gold checkmark inset circle -->
+    <circle cx="35" cy="35" r="20" fill="#D4A24C"/>
+    <path d="M 26 36 L 32 42 L 45 28" stroke="#0B1F3A" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+  <!-- Wordmark -->
+  <g font-family="'Plus Jakarta Sans', 'Manrope', system-ui, sans-serif" font-weight="800">
+    <text x="180" y="125" font-size="80" fill="#0B1F3A" letter-spacing="-2.5">TrustNear</text>
+  </g>
+  <text x="180" y="170" font-family="'Plus Jakarta Sans', system-ui, sans-serif" font-weight="500" font-size="20" fill="#4B5563" letter-spacing="2">VERIFIED  PROS  ·  NEAR  YOU</text>
+</svg>

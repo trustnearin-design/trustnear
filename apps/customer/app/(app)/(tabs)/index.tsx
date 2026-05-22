@@ -150,7 +150,7 @@ function HeroCard({ onPress }: { onPress: () => void }) {
         <View className="p-5">
           <View className="self-start rounded-pill bg-accent px-2.5 py-1">
             <Text className="text-[10px] font-bold uppercase tracking-wider text-ink-inverse">
-              Verified by SEVALINK
+              Verified by TrustNear
             </Text>
           </View>
           <Text className="mt-2 text-xl font-bold text-ink-inverse">
@@ -281,7 +281,7 @@ function CategoryWideCard({ category, onPress }: { category: Category; onPress: 
 function WhyStrip() {
   return (
     <View className="mx-5 mt-8 rounded-card bg-brand-900 p-5">
-      <Text className="text-xs font-bold uppercase tracking-wider text-accent">Why SEVALINK</Text>
+      <Text className="text-xs font-bold uppercase tracking-wider text-accent">Why TrustNear</Text>
       <Text className="mt-2 text-lg font-bold text-ink-inverse">
         Every expert is verified before they reach you
       </Text>

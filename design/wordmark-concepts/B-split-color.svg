@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 220" width="720" height="220">
+  <rect width="720" height="220" fill="#FAFAF7"/>
+  <!-- Trust in navy, Near in gold — splits the value prop visually -->
+  <g font-family="'Manrope', 'Plus Jakarta Sans', system-ui, sans-serif" font-weight="800">
+    <text x="80" y="130" font-size="88" fill="#0B1F3A" letter-spacing="-2.5">Trust</text>
+    <text x="320" y="130" font-size="88" fill="#D4A24C" letter-spacing="-2.5">Near</text>
+  </g>
+  <!-- subtle underline under both halves -->
+  <line x1="80" y1="148" x2="540" y2="148" stroke="#0B1F3A" stroke-width="2" opacity="0.15"/>
+  <text x="80" y="180" font-family="'Manrope', system-ui, sans-serif" font-weight="500" font-size="20" fill="#4B5563" letter-spacing="2">VERIFIED  PROS  ·  NEAR  YOU</text>
+</svg>

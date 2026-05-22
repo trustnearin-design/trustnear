@@ -65,13 +65,15 @@ export function badgeLabel(tier: string): string {
   return BADGE_LABELS[tier] ?? '';
 }
 
-const NONE_BADGE = { bg: 'transparent', text: '#94A3B8' };
+// Badge tier palettes — kept in sync with tailwind `badge.*` tokens.
+// Background is a soft tint, text is the saturated brand-tier color.
+const NONE_BADGE = { bg: 'transparent', text: '#9CA3AF' };
 const BADGE_COLORS: Record<string, { bg: string; text: string }> = {
   none: NONE_BADGE,
-  bronze: { bg: '#FCEFE6', text: '#92400E' },
-  silver: { bg: '#E5E7EB', text: '#374151' },
-  gold: { bg: '#FEF3C7', text: '#92400E' },
-  platinum: { bg: '#DBEAFE', text: '#1E40AF' },
+  bronze: { bg: '#F5EBDC', text: '#7A5A1F' }, // muted brown-gold
+  silver: { bg: '#E7E5E0', text: '#475569' }, // warm-tinted silver
+  gold: { bg: '#FBF7EE', text: '#A77A2C' }, // brand-gold tint
+  platinum: { bg: '#D8E2EE', text: '#0B1F3A' }, // brand-navy on cool-navy tint
 };
 
 export function badgeColors(tier: string): { bg: string; text: string } {

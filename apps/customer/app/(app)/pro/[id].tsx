@@ -176,7 +176,7 @@ function VerificationStrip({ pro }: { pro: ProDetail }) {
   return (
     <View className="mx-5 mt-4">
       <Text className="mb-2 text-xs font-bold uppercase tracking-wider text-ink-subtle">
-        Verified by SEVALINK
+        Verified by TrustNear
       </Text>
       <View className="flex-row rounded-card border border-border bg-surface px-2 py-3">
         {items.map((it, idx) => (

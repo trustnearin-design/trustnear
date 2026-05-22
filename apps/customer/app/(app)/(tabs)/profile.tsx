@@ -78,7 +78,7 @@ export default function ProfileScreen() {
         </View>
 
         <Text className="mt-6 text-center text-[11px] text-ink-subtle">
-          SEVALINK · v0.1.0 · Jaipur, IN
+          TrustNear · v0.1.0 · Jaipur, IN
         </Text>
       </ScrollView>
     </SafeAreaView>

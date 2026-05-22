@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 220" width="720" height="220">
+  <rect width="720" height="220" fill="#FAFAF7"/>
+  <!-- TrustNear in Plus Jakarta-style strong sans, dot of 'i' in 'Trust' replaced by shield glyph -->
+  <g font-family="'Plus Jakarta Sans', 'Inter', system-ui, sans-serif" font-weight="800">
+    <text x="60" y="130" font-size="84" fill="#0B1F3A" letter-spacing="-2">Trust</text>
+    <text x="305" y="130" font-size="84" fill="#0B1F3A" letter-spacing="-2">Near</text>
+    <!-- Shield replacing dot of 'i' (above 'i' of Trust). 'Trust' letters T-r-u-s-t -->
+    <!-- 'i' isn't in Trust; instead anchor shield over T cap to act as logo-mark accent -->
+  </g>
+  <!-- Shield mark above the 'u' of Trust as small accent -->
+  <g transform="translate(180,38)">
+    <path d="M 0 0 L 28 0 L 28 18 Q 28 30, 14 36 Q 0 30, 0 18 Z" fill="#D4A24C"/>
+    <path d="M 8 18 L 12 22 L 20 14" stroke="#FAFAF7" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+  <!-- Tagline below -->
+  <text x="60" y="172" font-family="'Plus Jakarta Sans', 'Inter', system-ui, sans-serif" font-weight="500" font-size="20" fill="#4B5563" letter-spacing="2">VERIFIED  PROS  ·  NEAR  YOU</text>
+</svg>

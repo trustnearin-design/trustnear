@@ -1,14 +1,17 @@
 import { customAlphabet } from 'nanoid';
 
 /**
- * Booking number — human-readable: SL-{YYYY}-{NNNNNN}
+ * Booking number — human-readable: TN-{YYYY}-{NNNNNN}
  * Uses cryptographically-strong random 6-digit suffix to avoid sequence collisions
  * across distributed instances. For monotonic ids use a DB sequence.
+ *
+ * Prefix history: SL- (during SEVALINK working-name era); existing SL-* bookings
+ * remain untouched in the DB — only newly generated numbers carry TN-.
  */
 const bookingDigits = customAlphabet('0123456789', 6);
 
 export function generateBookingNumber(now: Date = new Date()): string {
-  return `SL-${String(now.getUTCFullYear())}-${bookingDigits()}`;
+  return `TN-${String(now.getUTCFullYear())}-${bookingDigits()}`;
 }
 
 const ticketDigits = customAlphabet('0123456789', 6);

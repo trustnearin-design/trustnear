@@ -32,7 +32,7 @@ async function ensureAndroidChannel(): Promise<void> {
   if (Platform.OS !== 'android') return;
   await Notifications.setNotificationChannelAsync('sevalink-booking', {
     name: 'Booking updates',
-    description: 'Live status of your SEVALINK bookings + payment confirmations',
+    description: 'Live status of your TrustNear bookings + payment confirmations',
     importance: Notifications.AndroidImportance.HIGH,
     vibrationPattern: [0, 200, 100, 200],
     lightColor: '#FF7A1A',

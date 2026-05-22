@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 220" width="720" height="220">
+  <rect width="720" height="220" fill="#FAFAF7"/>
+  <!-- Wide-set uppercase, government-stamp feel = strong trust -->
+  <g font-family="'Plus Jakarta Sans', 'Manrope', system-ui, sans-serif" font-weight="700">
+    <text x="60" y="120" font-size="64" fill="#0B1F3A" letter-spacing="8">TRUSTNEAR</text>
+  </g>
+  <!-- Horizontal bookend rules -->
+  <line x1="60" y1="60" x2="660" y2="60" stroke="#0B1F3A" stroke-width="2"/>
+  <line x1="60" y1="145" x2="660" y2="145" stroke="#0B1F3A" stroke-width="2"/>
+  <!-- Gold checkmark accent -->
+  <g transform="translate(620,82)">
+    <circle r="14" fill="#D4A24C"/>
+    <path d="M -6 0 L -2 5 L 7 -5" stroke="#FAFAF7" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+  <text x="60" y="180" font-family="'Plus Jakarta Sans', system-ui, sans-serif" font-weight="500" font-size="18" fill="#4B5563" letter-spacing="3">VERIFIED   PROS   ·   NEAR   YOU</text>
+</svg>

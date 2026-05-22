@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "SEVALINK",
+    "name": "TrustNear",
     "slug": "sevalink-customer",
     "scheme": "sevalink",
     "version": "0.1.0",
@@ -33,7 +33,7 @@
       [
         "expo-location",
         {
-          "locationAlwaysAndWhenInUsePermission": "Allow SEVALINK to use your location to find verified pros near you."
+          "locationAlwaysAndWhenInUsePermission": "Allow TrustNear to use your location to find verified pros near you."
         }
       ]
     ],
