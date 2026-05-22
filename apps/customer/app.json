@@ -7,10 +7,6 @@
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
-    "splash": {
-      "resizeMode": "contain",
-      "backgroundColor": "#0F172A"
-    },
     "assetBundlePatterns": ["**/*"],
     "ios": {
       "supportsTablet": false,
@@ -18,14 +14,16 @@
     },
     "android": {
       "package": "in.sevalink.customer",
-      "adaptiveIcon": {
-        "backgroundColor": "#0F172A"
-      },
       "edgeToEdgeEnabled": true,
       "permissions": [
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.ACCESS_FINE_LOCATION"
-      ]
+      ],
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyCyq1RycJhHbGCASXgWzR4IEueeFVi-rus"
+        }
+      }
     },
     "plugins": [
       "expo-router",
