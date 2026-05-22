@@ -57,7 +57,8 @@ coverage/
 # Native build artifacts
 *.keystore
 *.jks
-google-services.json
+# google-services.json is checked in for the customer app — package-restricted
+# API key, safe for MVP. Move to EAS file secrets before open-sourcing.
 GoogleService-Info.plist
 
 # Mobile build outputs
