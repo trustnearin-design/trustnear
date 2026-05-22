@@ -310,13 +310,22 @@ model ProSchedule {
 
 model ServiceCategory {
   id                 String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  // Self-referential hierarchy: a category with `parentId = null` IS a
+  // parent ("Home Care"). A category with `parentId` set is a leaf
+  // ("Cleaning" → parent: Home Care). Two-level only — no grandchildren.
+  parentId           String?    @map("parent_id") @db.Uuid
   name               String     @db.VarChar(100)
   slug               String     @unique @db.VarChar(100)
   iconUrl            String?    @map("icon_url")
   bannerUrl          String?    @map("banner_url")
+  // `heroImageUrl` is the big photo shown on the child detail / parent tile
+  // (cleaning hand, beauty session, etc). Distinct from banner which is
+  // a wide promotional strip.
+  heroImageUrl       String?    @map("hero_image_url")
   professionalTitle  String?    @map("professional_title") @db.VarChar(100)
   description        String?
-  basePrice          Int        @map("base_price") // paise
+  shortPitch         String?    @map("short_pitch") @db.VarChar(160) // 1-liner shown on tiles
+  basePrice          Int        @map("base_price") // paise; only relevant for leaf categories
   priceUnit          PriceUnit  @default(per_hour) @map("price_unit")
   isActive           Boolean    @default(true) @map("is_active")
   isFeatured         Boolean    @default(false) @map("is_featured")
@@ -329,11 +338,14 @@ model ServiceCategory {
   updatedAt          DateTime   @updatedAt @map("updated_at") @db.Timestamptz()
   deletedAt          DateTime?  @map("deleted_at") @db.Timestamptz()
 
+  parent     ServiceCategory?     @relation("CategoryHierarchy", fields: [parentId], references: [id])
+  children   ServiceCategory[]    @relation("CategoryHierarchy")
   offerings  ProServiceOffering[]
   bookings   Booking[]
 
   @@index([slug])
   @@index([isActive, phase])
+  @@index([parentId])
   @@map("service_categories")
 }
 
