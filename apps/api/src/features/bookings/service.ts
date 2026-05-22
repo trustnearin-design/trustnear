@@ -542,6 +542,28 @@ export async function verifyBookingOtp(args: {
 
   logger.info({ bookingId: updated.id }, 'booking otp verified — in_progress');
   broadcastBookingStatus(updated.id, updated.status);
+
+  // verifyBookingOtp bypasses transitionBooking so its notifications hook
+  // doesn't fire — push the "arrived" notification here directly. Same
+  // fire-and-forget contract.
+  void (async () => {
+    const detail = await prisma.booking.findUnique({
+      where: { id: args.bookingId },
+      select: {
+        customerId: true,
+        professional: { select: { user: { select: { fullName: true } } } },
+      },
+    });
+    if (!detail) return;
+    await notifyBookingArrived({
+      customerId: detail.customerId,
+      bookingId: args.bookingId,
+      professionalName: detail.professional?.user.fullName ?? 'Your expert',
+    });
+  })().catch((err: unknown) => {
+    logger.error({ err, bookingId: args.bookingId }, 'notify: arrived dispatch failed');
+  });
+
   return updated;
 }
 

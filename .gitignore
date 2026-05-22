@@ -61,6 +61,11 @@ coverage/
 # API key, safe for MVP. Move to EAS file secrets before open-sourcing.
 GoogleService-Info.plist
 
+# Firebase Admin SDK service-account JSON — NEVER commit. Full admin
+# privileges over the Firebase project including FCM send.
+fcm-service-account.json
+*-firebase-adminsdk-*.json
+
 # Mobile build outputs
 ios/Pods/
 android/.gradle/

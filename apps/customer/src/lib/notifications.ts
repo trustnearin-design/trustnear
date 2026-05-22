@@ -45,6 +45,8 @@ async function ensureAndroidChannel(): Promise<void> {
  * logged but never thrown.
  */
 export async function registerPushTokenWithBackend(): Promise<{ ok: boolean; reason?: string }> {
+  // eslint-disable-next-line no-console
+  console.log('[push] registerPushTokenWithBackend: start', { isDevice: Device.isDevice });
   if (!Device.isDevice) {
     return { ok: false, reason: 'simulator' };
   }
@@ -52,12 +54,18 @@ export async function registerPushTokenWithBackend(): Promise<{ ok: boolean; rea
     await ensureAndroidChannel();
 
     const { status: existing } = await Notifications.getPermissionsAsync();
+    // eslint-disable-next-line no-console
+    console.log('[push] existing permission status:', existing);
     let granted = existing === 'granted';
     if (!granted) {
       const { status } = await Notifications.requestPermissionsAsync();
+      // eslint-disable-next-line no-console
+      console.log('[push] requested permission status:', status);
       granted = status === 'granted';
     }
     if (!granted) {
+      // eslint-disable-next-line no-console
+      console.log('[push] permission denied, abort');
       return { ok: false, reason: 'permission_denied' };
     }
 
@@ -67,16 +75,24 @@ export async function registerPushTokenWithBackend(): Promise<{ ok: boolean; rea
     const projectId =
       (Constants.expoConfig?.extra?.['eas'] as { projectId?: string } | undefined)?.projectId ??
       Constants.easConfig?.projectId;
+    // eslint-disable-next-line no-console
+    console.log('[push] using projectId:', projectId);
     const tokenRes = projectId
       ? await Notifications.getExpoPushTokenAsync({ projectId })
       : await Notifications.getExpoPushTokenAsync();
+    // eslint-disable-next-line no-console
+    console.log('[push] got token:', tokenRes.data.slice(0, 40) + '...');
 
     await apiFetch('/notifications/push-token', {
       method: 'POST',
       body: { token: tokenRes.data },
     });
+    // eslint-disable-next-line no-console
+    console.log('[push] registered with backend OK');
     return { ok: true };
   } catch (err) {
+    // eslint-disable-next-line no-console
+    console.log('[push] failed:', err instanceof Error ? err.message : String(err));
     if (err instanceof ApiCallError) {
       return { ok: false, reason: `api_${err.code}` };
     }
