@@ -35,12 +35,12 @@ type Variant =
 // Each pose file is require()'d at module load. If a per-variant pose
 // file is missing on disk, the install script copies mascot-hero.png
 // into its slot as a fallback — so these require()s never fail bundle.
-const POSE_WAVING = require('../../../assets/mascot-waving.png');
-const POSE_NAMASTE = require('../../../assets/mascot-namaste.png');
-const POSE_VERIFIED = require('../../../assets/mascot-verified.png');
-const POSE_DOORSTEP = require('../../../assets/mascot-doorstep.png');
-const POSE_TOOLBOX = require('../../../assets/mascot-toolbox.png');
-const POSE_CONFIDENT = require('../../../assets/mascot-confident.png');
+const POSE_WAVING = require('../../../assets/mascot-waving.webp');
+const POSE_NAMASTE = require('../../../assets/mascot-namaste.webp');
+const POSE_VERIFIED = require('../../../assets/mascot-verified.webp');
+const POSE_DOORSTEP = require('../../../assets/mascot-doorstep.webp');
+const POSE_TOOLBOX = require('../../../assets/mascot-toolbox.webp');
+const POSE_CONFIDENT = require('../../../assets/mascot-confident.webp');
 
 /**
  * Mood → pose mapping. Tweak this without touching screens — every screen

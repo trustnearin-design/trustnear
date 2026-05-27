@@ -7,7 +7,7 @@ import { Gradient } from './Gradient';
 import { colors } from '../../theme/colors';
 
 const LOGO_DARK_BG = require('../../../assets/splash-icon.png');
-const MASCOT_PNG = require('../../../assets/mascot-doorstep.png');
+const MASCOT_PNG = require('../../../assets/mascot-doorstep.webp');
 
 interface BrandLoadingScreenProps {
   /** Top eyebrow label — e.g. "Detecting your location" or "Finding experts". */
