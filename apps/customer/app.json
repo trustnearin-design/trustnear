@@ -55,8 +55,8 @@
       "typedRoutes": true
     },
     "extra": {
-      "apiBaseUrl": "http://10.0.2.2:3000",
-      "apiBaseUrlDevice": "http://192.168.1.19:3000",
+      "apiBaseUrl": "https://tr-92c1d37d0d36413184cb339d4053c046.ecs.ap-south-1.on.aws",
+      "apiBaseUrlDevice": "https://tr-92c1d37d0d36413184cb339d4053c046.ecs.ap-south-1.on.aws",
       "router": {},
       "eas": {
         "projectId": "ae5c2d6c-25b1-4e34-8b4b-4e2fe72ccec8"
