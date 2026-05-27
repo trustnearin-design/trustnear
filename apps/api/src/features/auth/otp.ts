@@ -1,9 +1,22 @@
 import { generateOtp, sha256, timingSafeEqual } from '@sevalink/utils';
 import { redis } from '../../redis.js';
 import { logger } from '../../logger.js';
+import { env } from '../../env.js';
 
 const OTP_TTL_SECONDS = 10 * 60; // 10 min
 const MAX_VERIFY_ATTEMPTS = 5;
+
+// Test-OTP bypass: whitelisted phones (non-prod only) get a fixed code so
+// internal testers can log in while real SMS waits on MSG91 DLT approval.
+const TEST_OTP_PHONES = new Set(
+  env.TEST_OTP_PHONES.split(',')
+    .map((s) => s.trim())
+    .filter(Boolean),
+);
+
+function usesFixedOtp(phone: string): boolean {
+  return env.NODE_ENV !== 'production' && TEST_OTP_PHONES.has(phone);
+}
 
 function otpKey(phone: string): string {
   return `otp:${phone}`;
@@ -22,14 +35,19 @@ export interface CreateOtpResult {
  * OTP so the SMS provider can deliver it. The plain value is NEVER persisted.
  */
 export async function createOtp(phone: string): Promise<CreateOtpResult> {
-  const otp = generateOtp();
+  const fixed = usesFixedOtp(phone);
+  const otp = fixed ? env.TEST_OTP_CODE : generateOtp();
   const hash = sha256(otp);
   await redis
     .multi()
     .set(otpKey(phone), hash, 'EX', OTP_TTL_SECONDS)
     .del(attemptsKey(phone))
     .exec();
-  logger.debug({ phone }, 'otp issued');
+  if (fixed) {
+    logger.warn({ phone }, 'TEST OTP bypass active — fixed code issued (non-prod, whitelisted)');
+  } else {
+    logger.debug({ phone }, 'otp issued');
+  }
   return { otp, expiresInSeconds: OTP_TTL_SECONDS };
 }
 

@@ -47,6 +47,16 @@ const EnvSchema = z.object({
   MSG91_TEMPLATE_ID: emptyToUndefined,
   MSG91_SENDER_ID: z.string().default('SEVAOTP'),
 
+  // Test-OTP bypass (NON-PROD / internal testing only). Phones listed here
+  // (comma-separated) get a fixed OTP instead of a random one, so testers can
+  // log in while real SMS is blocked on MSG91 DLT approval. Keep empty in
+  // production to disable entirely — random OTPs resume for everyone.
+  TEST_OTP_PHONES: z.string().default(''),
+  TEST_OTP_CODE: z
+    .string()
+    .regex(/^\d{6}$/, 'TEST_OTP_CODE must be 6 digits')
+    .default('123456'),
+
   GOOGLE_MAPS_API_KEY: emptyToUndefined,
 
   // Payment gateway — swappable. Default + override via app_config.payment_provider
