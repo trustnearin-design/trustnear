@@ -14,7 +14,12 @@
 # import time. Boot is fast, image stays simple, no build-output sync.
 # ─────────────────────────────────────────────────────────────────────
 
-FROM node:22-alpine
+# Pull from Amazon ECR Public Gallery mirror, not Docker Hub.
+# CodeBuild's egress IPs share Docker Hub anonymous rate limits with many
+# other AWS customers — first builds frequently hit 429 Too Many Requests.
+# public.ecr.aws/docker/library/* mirrors the official images with no
+# anonymous pull limit.
+FROM public.ecr.aws/docker/library/node:22-alpine
 RUN apk add --no-cache libc6-compat openssl tini
 RUN corepack enable && corepack prepare pnpm@11.1.3 --activate
 

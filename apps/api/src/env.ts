@@ -1,18 +1,19 @@
 import { z } from 'zod';
 
 /**
- * Normalize empty strings in optional fields to undefined.
- * Without this, .env files that leave a value blank ("SENTRY_DSN=") fail .url()
- * even though the operator clearly meant "not set."
+ * Normalize optional env vars: treat both "missing" (undefined) and "blank" ("")
+ * as not-set. Crucial for container deploys where unused optional vars are
+ * simply omitted from the task definition (vs .env files where they're "").
  */
 const emptyToUndefined = z
   .string()
-  .transform((s) => (s.trim() === '' ? undefined : s))
-  .pipe(z.string().optional());
+  .optional()
+  .transform((s) => (s == null || s.trim() === '' ? undefined : s));
 
 const optionalUrl = z
   .string()
-  .transform((s) => (s.trim() === '' ? undefined : s))
+  .optional()
+  .transform((s) => (s == null || s.trim() === '' ? undefined : s))
   .pipe(z.string().url().optional());
 
 /**
