@@ -1,0 +1,30 @@
+# ─────────────────────────────────────────────────────────────────────
+# AWS App Runner — runtime config for the SEVALINK API.
+#
+# Use this when creating the App Runner service with "Source = ECR image".
+# Build is handled by GitHub Actions (see .github/workflows/deploy-api.yml)
+# which pushes to ECR; App Runner watches the image tag.
+#
+# Health check, port, env vars, and CPU/memory are configured in the App
+# Runner console (or via Terraform later). This file is reserved for
+# build-from-source path if we ever switch back.
+# ─────────────────────────────────────────────────────────────────────
+
+version: 1.0
+runtime: docker
+build:
+  commands:
+    build:
+      - echo "Build is done by GitHub Actions — image already in ECR"
+run:
+  runtime-version: 22
+  command: node apps/api/dist/server.js
+  network:
+    port: 8080
+    env: PORT
+  env:
+    - name: NODE_ENV
+      value: production
+# Health check: configure in App Runner console to use HTTP GET on /health
+# (root, not /health/live or /health/ready). Healthy threshold: 1, unhealthy: 5.
+# Path: /health   Port: 8080   Protocol: HTTP   Interval: 10s   Timeout: 5s.

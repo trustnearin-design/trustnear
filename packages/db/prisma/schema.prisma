@@ -31,6 +31,18 @@ enum UserRole {
   admin
 }
 
+/**
+ * Admin sub-roles — granular within role=admin so we can let ops staff
+ * triage disputes without giving them refund power, etc. Nullable on
+ * User (only set for role=admin users). `super` is the bootstrap role.
+ */
+enum AdminRole {
+  super
+  ops
+  finance
+  support
+}
+
 enum ProAvailability {
   online
   offline
@@ -186,6 +198,7 @@ model User {
   email           String?   @unique @db.VarChar(255)
   fullName        String    @map("full_name") @db.VarChar(100)
   role            UserRole
+  adminRole       AdminRole? @map("admin_role")
   profilePhoto    String?   @map("profile_photo")
   city            String    @default("Jaipur") @db.VarChar(50)
   area            String?   @db.VarChar(100)
@@ -238,6 +251,18 @@ model Professional {
   faceVerified             Boolean           @default(false) @map("face_verified")
   bankVerified             Boolean           @default(false) @map("bank_verified")
   policeVerified           Boolean           @default(false) @map("police_verified")
+  // Setu KYC (Phase 3f) — minimum needed for verification + UX display
+  panNumber                String?           @map("pan_number") @db.VarChar(10)
+  panVerified              Boolean           @default(false) @map("pan_verified")
+  panFullName              String?           @map("pan_full_name")
+  aadhaarLastFour          String?           @map("aadhaar_last_four") @db.VarChar(4)
+  aadhaarFullName          String?           @map("aadhaar_full_name")
+  aadhaarDob               DateTime?         @map("aadhaar_dob") @db.Date
+  aadhaarPhotoUrl          String?           @map("aadhaar_photo_url")
+  bankAccountLastFour      String?           @map("bank_account_last_four") @db.VarChar(4)
+  bankAccountHolderName    String?           @map("bank_account_holder_name")
+  digilockerRequestId      String?           @map("digilocker_request_id") @db.VarChar(50)
+  kycUpdatedAt             DateTime?         @map("kyc_updated_at") @db.Timestamptz(3)
   // Payouts (Razorpay Route)
   accountNumberEncrypted   String?           @map("account_number_encrypted")
   ifscCode                 String?           @map("ifsc_code") @db.VarChar(15)
@@ -245,6 +270,8 @@ model Professional {
   razorpayFundId           String?           @map("razorpay_fund_id") @db.VarChar(50)
   // Media
   introVideoUrl            String?           @map("intro_video_url")
+  portfolioUrls            String[]          @default([]) @map("portfolio_urls")
+  certifications           String[]          @default([])
   // Metrics (denormalized for read perf — kept in sync via triggers/jobs)
   totalBookings            Int               @default(0) @map("total_bookings")
   repeatClientCount        Int               @default(0) @map("repeat_client_count")
@@ -624,6 +651,53 @@ model AppConfig {
   @@map("app_config")
 }
 
+// Promo banners shown on customer home / category screens. Admin-managed
+// from the TrustNear admin console. `placement` controls WHERE the banner
+// appears (home hero slider vs category strip vs booking screen).
+model HomeBanner {
+  id            String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  title         String       @db.VarChar(100)
+  subtitle      String?      @db.VarChar(160)
+  imageUrl      String       @map("image_url")
+  placement     BannerPlacement @default(home_hero)
+  // Optional click action — when tapped on customer app:
+  //   - 'none'        → no-op
+  //   - 'category'    → /category/<linkTarget> (slug)
+  //   - 'external'    → external URL (linkTarget)
+  //   - 'promo'       → apply promo code in linkTarget
+  ctaText       String?      @map("cta_text") @db.VarChar(40)
+  linkKind      BannerLinkKind @default(none) @map("link_kind")
+  linkTarget    String?      @map("link_target")
+  // Scheduling — banner only visible within window (both nullable = always).
+  startsAt      DateTime?    @map("starts_at") @db.Timestamptz()
+  endsAt        DateTime?    @map("ends_at") @db.Timestamptz()
+  // Ordering + visibility
+  sortOrder     Int          @default(0) @map("sort_order") @db.SmallInt
+  isActive      Boolean      @default(true) @map("is_active")
+  // Audit
+  createdBy     String?      @map("created_by") @db.Uuid
+  createdAt     DateTime     @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt     DateTime     @updatedAt @map("updated_at") @db.Timestamptz()
+  deletedAt     DateTime?    @map("deleted_at") @db.Timestamptz()
+
+  @@index([placement, isActive, sortOrder])
+  @@map("home_banners")
+}
+
+enum BannerPlacement {
+  home_hero           // top slider on customer home
+  home_strip          // mid-page horizontal strip
+  category_top        // top of category detail screen
+  booking_complete    // shown after successful booking
+}
+
+enum BannerLinkKind {
+  none
+  category
+  external
+  promo
+}
+
 // ═══════════════════════════════════════════════════════════════════════
 // ADVANCED-MODE ADDITIONS (beyond blueprint)
 // ═══════════════════════════════════════════════════════════════════════
@@ -686,4 +760,109 @@ model SavedAddress {
 
   @@index([userId, isDefault])
   @@map("saved_addresses")
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// CMS — admin-editable content (Phase D)
+// ═══════════════════════════════════════════════════════════════════════
+
+enum TemplateChannel {
+  push
+  email
+  sms
+}
+
+// Editable notification copy — one row per event key. Dispatcher reads
+// the template, substitutes {{variables}}, and falls back to hardcoded
+// copy if the row is missing or inactive (so launches never block on a
+// CMS gap).
+model NotificationTemplate {
+  id          String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  eventKey    String          @unique @map("event_key") @db.VarChar(60)
+  channel     TemplateChannel @default(push)
+  title       String          @db.VarChar(200)
+  body        String
+  variables   String[]        @default([])
+  description String?
+  isActive    Boolean         @default(true) @map("is_active")
+  createdAt   DateTime        @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt   DateTime        @updatedAt @map("updated_at") @db.Timestamptz()
+
+  @@index([channel, isActive])
+  @@map("notification_templates")
+}
+
+enum AnnouncementAudience {
+  all
+  customers
+  professionals
+}
+
+enum AnnouncementStatus {
+  draft
+  scheduled
+  sending
+  sent
+  failed
+}
+
+// One-off broadcast push notifications fired from admin. The actual
+// fan-out runs in a background job; this row tracks the lifecycle.
+model Announcement {
+  id          String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  title       String               @db.VarChar(200)
+  body        String
+  audience    AnnouncementAudience @default(all)
+  status      AnnouncementStatus   @default(draft)
+  scheduledAt DateTime?            @map("scheduled_at") @db.Timestamptz()
+  sentAt      DateTime?            @map("sent_at") @db.Timestamptz()
+  sentCount   Int                  @default(0) @map("sent_count")
+  failedCount Int                  @default(0) @map("failed_count")
+  targetCount Int                  @default(0) @map("target_count")
+  deepLink    String?              @map("deep_link") @db.VarChar(200)
+  createdBy   String               @map("created_by") @db.Uuid
+  createdAt   DateTime             @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt   DateTime             @updatedAt @map("updated_at") @db.Timestamptz()
+
+  @@index([status, scheduledAt])
+  @@map("announcements")
+}
+
+// FAQs — public read, admin write. Grouped by category, ordered manually
+// via sortOrder. Body is rendered as plain text/markdown on the client.
+model FaqArticle {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  slug        String    @unique @db.VarChar(100)
+  category    String    @db.VarChar(50)
+  question    String    @db.VarChar(300)
+  body        String
+  sortOrder   Int       @default(0) @map("sort_order")
+  isPublished Boolean   @default(true) @map("is_published")
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz()
+  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz()
+
+  @@index([category, sortOrder])
+  @@index([isPublished])
+  @@map("faq_articles")
+}
+
+// Legal pages — Terms, Privacy, Refund. Versioned: editing creates a new
+// row with version=N+1; the client always reads the highest published
+// version. Lets us preserve historical text users agreed to.
+model LegalPage {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  slug        String    @db.VarChar(50)
+  title       String    @db.VarChar(200)
+  body        String
+  version     Int       @default(1)
+  effectiveAt DateTime  @default(now()) @map("effective_at") @db.Timestamptz()
+  isPublished Boolean   @default(false) @map("is_published")
+  createdBy   String?   @map("created_by") @db.Uuid
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz()
+
+  @@unique([slug, version])
+  @@index([slug, isPublished, version(sort: Desc)])
+  @@map("legal_pages")
 }

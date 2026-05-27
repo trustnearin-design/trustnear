@@ -8,6 +8,7 @@ export default function AppStackLayout() {
   return (
     <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
       <Stack.Screen name="(tabs)" />
+      <Stack.Screen name="search" options={{ animation: 'fade' }} />
       <Stack.Screen name="category/[slug]" options={{ headerShown: true, title: '' }} />
       <Stack.Screen name="pro/[id]" options={{ headerShown: true, title: '' }} />
       <Stack.Screen name="book/[expertId]" options={{ headerShown: true, title: 'Book expert' }} />

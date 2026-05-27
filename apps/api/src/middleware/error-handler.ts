@@ -1,4 +1,5 @@
 import type { ErrorHandler } from 'hono';
+import * as Sentry from '@sentry/node';
 import { ZodError } from 'zod';
 import { DomainError, ErrorCode } from '@sevalink/types';
 import { logger } from '../logger.js';
@@ -54,8 +55,18 @@ export const errorHandler: ErrorHandler<{ Variables: { requestId: string } }> = 
     );
   }
 
-  // Truly unexpected — log full, redact in response
+  // Truly unexpected — log full, redact in response, alert Sentry if configured.
+  // We do NOT capture DomainError / ZodError because those are expected user-input
+  // outcomes; only the 500-class unknowns are worth paging on.
   logger.error({ requestId, err }, 'unhandled error');
+  if (env.SENTRY_DSN) {
+    Sentry.withScope((scope) => {
+      scope.setTag('requestId', requestId);
+      scope.setTag('path', c.req.path);
+      scope.setTag('method', c.req.method);
+      Sentry.captureException(err);
+    });
+  }
   return c.json(
     {
       success: false,

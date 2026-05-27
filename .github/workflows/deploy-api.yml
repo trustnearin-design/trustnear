@@ -1,0 +1,119 @@
+# ─────────────────────────────────────────────────────────────────────
+# Build → push → deploy the SEVALINK API.
+#
+# Triggers:
+#   - push to `main` (auto-deploy production)
+#   - manual workflow_dispatch (for staging / hotfix re-deploy)
+#
+# Required GitHub repo secrets:
+#   AWS_ACCOUNT_ID          12-digit AWS account ID for SEVALINK
+#   AWS_REGION              ap-south-1 (Mumbai)
+#   AWS_DEPLOY_ROLE_ARN     IAM role ARN with ECR push + App Runner update
+#                           (created via OIDC trust to this repo)
+#   APP_RUNNER_SERVICE_ARN  ARN of the App Runner service to update
+#
+# IAM role setup (one-time, done via console or Terraform):
+#   1. Create OIDC provider for token.actions.githubusercontent.com
+#   2. Create role `github-actions-deploy` with trust policy allowing
+#      this repo's main branch
+#   3. Attach inline policy with ecr:* + apprunner:StartDeployment +
+#      apprunner:DescribeService on the API service ARN
+# ─────────────────────────────────────────────────────────────────────
+
+name: Deploy API → AWS App Runner
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/api/**'
+      - 'packages/db/**'
+      - 'packages/types/**'
+      - 'packages/utils/**'
+      - 'pnpm-lock.yaml'
+      - '.github/workflows/deploy-api.yml'
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: 'Why are you manually re-deploying?'
+        required: false
+        default: 'hotfix'
+
+concurrency:
+  # One deploy at a time per branch — newer pushes cancel in-flight builds.
+  group: deploy-api-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  id-token: write # OIDC token for AWS
+  contents: read
+
+env:
+  ECR_REPOSITORY: trustnear-api
+  IMAGE_TAG: ${{ github.sha }}
+
+jobs:
+  build-and-deploy:
+    name: Build & deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build & push image to ECR
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/api/Dockerfile
+          push: true
+          tags: |
+            ${{ steps.ecr-login.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}
+            ${{ steps.ecr-login.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64
+
+      - name: Trigger App Runner deployment
+        run: |
+          aws apprunner start-deployment \
+            --service-arn "${{ secrets.APP_RUNNER_SERVICE_ARN }}" \
+            --region "${{ secrets.AWS_REGION }}"
+
+      - name: Wait for deployment to stabilize
+        run: |
+          echo "Polling App Runner service status for up to 10 minutes..."
+          for i in $(seq 1 60); do
+            STATUS=$(aws apprunner describe-service \
+              --service-arn "${{ secrets.APP_RUNNER_SERVICE_ARN }}" \
+              --region "${{ secrets.AWS_REGION }}" \
+              --query 'Service.Status' --output text)
+            echo "[$i] App Runner status: $STATUS"
+            case "$STATUS" in
+              RUNNING)
+                echo "✅ Deployment succeeded"
+                exit 0
+                ;;
+              CREATE_FAILED|DELETE_FAILED|PAUSED)
+                echo "❌ Deployment failed with status: $STATUS"
+                exit 1
+                ;;
+            esac
+            sleep 10
+          done
+          echo "⚠️  Timed out waiting for App Runner to stabilize"
+          exit 1

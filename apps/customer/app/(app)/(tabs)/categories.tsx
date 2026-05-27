@@ -5,28 +5,81 @@ import {
   Pressable,
   ActivityIndicator,
   RefreshControl,
-  Image,
+  ImageBackground,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
-import { useCategories, type Category } from '../../../src/api/discovery';
-import { formatRupees, priceUnitLabel } from '../../../src/lib/format';
-import { categoryPhoto } from '../../../src/lib/imagery';
+import {
+  useCategoryTree,
+  type CategoryTreeChild,
+  type CategoryTreeParent,
+} from '../../../src/api/discovery';
 import { colors } from '../../../src/theme/colors';
 
 export default function CategoriesScreen() {
   const router = useRouter();
-  const { data, isPending, isError, isFetching, refetch } = useCategories(false);
+  const { data, isPending, isError, isFetching, refetch } = useCategoryTree();
+  const insets = useSafeAreaInsets();
+  const bottomPad = 64 + insets.bottom + 32;
+
+  const totalLeaves = (data?.tree ?? []).reduce((n, p) => n + p.children.length, 0);
 
   return (
-    <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
-      <View className="px-5 pb-3 pt-3">
-        <Text className="text-2xl font-bold text-ink">Services</Text>
-        <Text className="mt-1 text-sm text-ink-muted">
-          Tap a service to find verified experts near you
-        </Text>
+    <View className="flex-1 bg-surface-muted">
+      <StatusBar style="light" />
+
+      {/* Navy header */}
+      <View className="bg-brand-800" style={{ paddingBottom: 28 }}>
+        <View
+          style={{
+            position: 'absolute',
+            top: -40,
+            right: -40,
+            width: 200,
+            height: 200,
+            borderRadius: 100,
+            backgroundColor: 'rgba(212,162,76,0.16)',
+          }}
+        />
+        <SafeAreaView edges={['top']}>
+          <View className="px-5 pt-2">
+            <Text
+              className="text-[10px] font-bold uppercase tracking-[2px]"
+              style={{ color: colors.accent[200] }}
+            >
+              All services
+            </Text>
+            <Text className="mt-1 text-[26px] font-bold text-ink-inverse">
+              What can we do for you?
+            </Text>
+            {totalLeaves > 0 ? (
+              <Text className="mt-1 text-[13px]" style={{ color: colors.accent[200] }}>
+                {totalLeaves} verified services at your doorstep
+              </Text>
+            ) : null}
+          </View>
+        </SafeAreaView>
       </View>
+
+      {/* Search pill floats on boundary */}
+      <Pressable
+        onPress={() => router.push('/(app)/search')}
+        className="mx-5 -mt-6 flex-row items-center rounded-card border border-border bg-surface px-4 py-3.5"
+        style={{
+          shadowColor: '#000',
+          shadowOpacity: 0.12,
+          shadowRadius: 14,
+          shadowOffset: { width: 0, height: 6 },
+          elevation: 6,
+        }}
+      >
+        <Ionicons name="search" size={18} color={colors.ink.subtle} />
+        <Text className="ml-3 flex-1 text-[14px] text-ink-subtle">
+          Search cleaning, salon, AC&hellip;
+        </Text>
+      </Pressable>
 
       {isPending ? (
         <View className="flex-1 items-center justify-center">
@@ -34,7 +87,7 @@ export default function CategoriesScreen() {
         </View>
       ) : isError ? (
         <View className="px-5 pt-6">
-          <Text className="text-sm text-danger">Couldn't load services.</Text>
+          <Text className="text-sm text-danger">Couldn&apos;t load services.</Text>
           <Pressable onPress={() => void refetch()} className="mt-2 self-start">
             <Text className="text-sm font-semibold text-brand">Try again</Text>
           </Pressable>
@@ -42,84 +95,114 @@ export default function CategoriesScreen() {
       ) : (
         <ScrollView
           className="flex-1"
-          contentContainerClassName="px-5 pb-8"
+          contentContainerStyle={{ paddingTop: 16, paddingBottom: bottomPad }}
           showsVerticalScrollIndicator={false}
           refreshControl={
-            <RefreshControl refreshing={isFetching} onRefresh={() => void refetch()} />
+            <RefreshControl
+              refreshing={isFetching}
+              onRefresh={() => void refetch()}
+              tintColor={colors.brand.DEFAULT}
+            />
           }
         >
-          {data.categories.map((c) => (
-            <BigCategoryCard
-              key={c.id}
-              category={c}
-              onPress={() =>
-                router.push({ pathname: '/(app)/category/[slug]', params: { slug: c.slug } })
+          {(data?.tree ?? []).map((parent) => (
+            <ParentBlock
+              key={parent.id}
+              parent={parent}
+              onParentPress={() =>
+                router.push({
+                  pathname: '/(app)/category/[slug]',
+                  params: { slug: parent.slug },
+                })
+              }
+              onChildPress={(child) =>
+                router.push({
+                  pathname: '/(app)/category/[slug]',
+                  params: { slug: child.slug },
+                })
               }
             />
           ))}
-          {data.categories.length === 0 ? (
-            <Text className="mt-6 text-center text-sm text-ink-subtle">No services available.</Text>
-          ) : null}
         </ScrollView>
       )}
-    </SafeAreaView>
+    </View>
   );
 }
 
-function BigCategoryCard({ category, onPress }: { category: Category; onPress: () => void }) {
+function ParentBlock({
+  parent,
+  onParentPress,
+  onChildPress,
+}: {
+  parent: CategoryTreeParent;
+  onParentPress: () => void;
+  onChildPress: (child: CategoryTreeChild) => void;
+}) {
   return (
-    <Pressable
-      onPress={onPress}
-      className="mt-3 overflow-hidden rounded-card bg-surface"
-      style={{ elevation: 2 }}
-    >
-      <View>
-        <Image
-          source={{ uri: categoryPhoto(category.slug) }}
-          style={{ width: '100%', height: 140, backgroundColor: '#E2E8F0' }}
-        />
-        {category.isFeatured ? (
-          <View className="absolute left-3 top-3 rounded-pill bg-accent px-2.5 py-1">
-            <Text className="text-[10px] font-bold uppercase tracking-wider text-ink-inverse">
-              Featured
+    <View className="mt-2">
+      <View className="flex-row items-center justify-between px-5">
+        <View className="flex-1">
+          <Text className="text-[17px] font-bold text-ink">{parent.name}</Text>
+          {parent.shortPitch ? (
+            <Text numberOfLines={1} className="mt-0.5 text-[12px] text-ink-muted">
+              {parent.shortPitch}
             </Text>
-          </View>
-        ) : null}
-      </View>
-      <View className="p-4">
-        <View className="flex-row items-start justify-between">
-          <View className="flex-1 pr-3">
-            <Text className="text-base font-bold text-ink">{category.name}</Text>
-            <Text numberOfLines={2} className="mt-1 text-xs text-ink-muted">
-              {category.description}
-            </Text>
-          </View>
-          <View className="items-end">
-            <Text className="text-xs text-ink-subtle">From</Text>
-            <Text className="text-base font-bold text-brand">
-              {formatRupees(category.basePrice)}
-            </Text>
-            <Text className="text-[11px] text-ink-subtle">
-              {priceUnitLabel(category.priceUnit).replace('/', '')}
-            </Text>
-          </View>
+          ) : null}
         </View>
-        <View className="mt-3 flex-row items-center justify-between border-t border-border pt-3">
-          <View className="flex-row items-center">
-            <Ionicons name="shield-checkmark" size={14} color={colors.success} />
-            <Text className="ml-1 text-[11px] font-medium text-ink-muted">Verified experts</Text>
-          </View>
-          <View className="flex-row items-center">
-            <Text className="text-xs font-semibold text-brand">Find experts</Text>
-            <Ionicons
-              name="arrow-forward"
-              size={14}
-              color={colors.brand.DEFAULT}
-              style={{ marginLeft: 4 }}
-            />
-          </View>
-        </View>
+        <Pressable onPress={onParentPress} hitSlop={8} className="flex-row items-center">
+          <Text className="text-[12px] font-bold text-brand">View all</Text>
+          <Ionicons
+            name="arrow-forward"
+            size={12}
+            color={colors.brand.DEFAULT}
+            style={{ marginLeft: 4 }}
+          />
+        </Pressable>
       </View>
-    </Pressable>
+
+      <View className="mt-2 flex-row flex-wrap px-3">
+        {parent.children.map((child) => (
+          <View key={child.id} className="w-1/2 p-2">
+            <Pressable
+              onPress={() => onChildPress(child)}
+              className="overflow-hidden rounded-card bg-surface"
+              style={{
+                shadowColor: '#000',
+                shadowOpacity: 0.06,
+                shadowRadius: 8,
+                shadowOffset: { width: 0, height: 3 },
+                elevation: 2,
+              }}
+            >
+              <ImageBackground
+                source={{ uri: child.heroImageUrl ?? undefined }}
+                style={{ height: 100 }}
+                imageStyle={{ backgroundColor: '#E7E5E0' }}
+              >
+                <View
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    backgroundColor: 'rgba(11,31,58,0.18)',
+                  }}
+                />
+              </ImageBackground>
+              <View className="px-3 py-2.5">
+                <Text numberOfLines={1} className="text-[13px] font-bold text-ink">
+                  {child.name}
+                </Text>
+                <Text className="mt-1 text-[11px] font-bold text-brand">
+                  ₹{Math.round(child.basePrice / 100)}
+                  {child.priceUnit === 'per_hour' ? '/hr' : ''}
+                </Text>
+              </View>
+            </Pressable>
+          </View>
+        ))}
+      </View>
+    </View>
   );
 }

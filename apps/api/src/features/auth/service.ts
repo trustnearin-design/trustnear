@@ -40,6 +40,13 @@ export async function findOrCreateUser(args: {
     return existing;
   }
 
+  // Admin accounts are NEVER auto-provisioned — they must be seeded via
+  // scripts/create-admin.mjs. This prevents random phone numbers from
+  // logging into the admin console even with a valid OTP.
+  if (args.role === 'admin') {
+    throw new AuthError(ErrorCode.SL_107_USER_NOT_FOUND, 'No admin account for this number.');
+  }
+
   // First-time login → create user
   let referredById: string | null = null;
   if (args.referredByCode) {
@@ -61,7 +68,7 @@ export async function findOrCreateUser(args: {
     referralCode = generateReferralCode();
   }
 
-  return prisma.user.create({
+  const user = await prisma.user.create({
     data: {
       phone: args.phone,
       role: args.role,
@@ -70,6 +77,19 @@ export async function findOrCreateUser(args: {
       ...(referredById ? { referredById } : {}),
     },
   });
+
+  // Pros need a Professional row before /pros/me, /verify/*, and the
+  // matcher will work — create one with empty defaults so the Pro app's
+  // KYC flow starts cleanly on first login. All KYC flags default to
+  // false in the schema, so the Pro will see "0 of 4 verified" until
+  // they walk through the Setu flow.
+  if (args.role === 'professional') {
+    await prisma.professional.create({
+      data: { userId: user.id },
+    });
+  }
+
+  return user;
 }
 
 /**

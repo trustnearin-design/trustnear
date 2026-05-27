@@ -1,6 +1,7 @@
 import { ScrollView, View, Text, Pressable, ActivityIndicator, RefreshControl } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
 import { isTerminalStatus, useMyBookings, type BookingListItem } from '../../../src/api/bookings';
 import {
@@ -15,17 +16,41 @@ import { Avatar } from '../../../src/components/Avatar';
 export default function BookingsScreen() {
   const router = useRouter();
   const { data, isPending, isError, isFetching, refetch } = useMyBookings();
+  const insets = useSafeAreaInsets();
+  const bottomPad = 64 + insets.bottom + 32;
 
   const active = (data?.bookings ?? []).filter((b) => !isTerminalStatus(b.status));
   const past = (data?.bookings ?? []).filter((b) => isTerminalStatus(b.status));
 
   return (
-    <SafeAreaView className="flex-1 bg-surface-muted" edges={['top']}>
-      <View className="bg-surface px-5 pb-3 pt-3">
-        <Text className="text-2xl font-bold text-ink">My bookings</Text>
-        <Text className="mt-1 text-sm text-ink-muted">
-          Track your active services and past visits
-        </Text>
+    <View className="flex-1 bg-surface-muted">
+      <StatusBar style="light" />
+      <View className="bg-brand-800" style={{ paddingBottom: 16 }}>
+        <View
+          style={{
+            position: 'absolute',
+            top: -40,
+            right: -40,
+            width: 200,
+            height: 200,
+            borderRadius: 100,
+            backgroundColor: 'rgba(212,162,76,0.16)',
+          }}
+        />
+        <SafeAreaView edges={['top']}>
+          <View className="px-5 pt-2">
+            <Text
+              className="text-[10px] font-bold uppercase tracking-[2px]"
+              style={{ color: colors.accent[200] }}
+            >
+              Your activity
+            </Text>
+            <Text className="mt-1 text-[26px] font-bold text-ink-inverse">My bookings</Text>
+            <Text className="mt-0.5 text-[13px]" style={{ color: colors.accent[200] }}>
+              {active.length} active · {past.length} past
+            </Text>
+          </View>
+        </SafeAreaView>
       </View>
 
       {isPending ? (
@@ -42,7 +67,7 @@ export default function BookingsScreen() {
       ) : (
         <ScrollView
           className="flex-1"
-          contentContainerClassName="pb-8"
+          contentContainerStyle={{ paddingBottom: bottomPad }}
           showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl refreshing={isFetching} onRefresh={() => void refetch()} />
@@ -81,7 +106,7 @@ export default function BookingsScreen() {
           ) : null}
         </ScrollView>
       )}
-    </SafeAreaView>
+    </View>
   );
 }
 

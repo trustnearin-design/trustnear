@@ -23,18 +23,43 @@ export interface ResolvedAddress {
 export const FALLBACK_COORDS: UserCoords = { lat: 26.9124, lng: 75.7873 };
 
 /**
- * Ask for foreground location permission and read the current position.
- * Returns null if the user denies — callers should fall back to FALLBACK_COORDS
- * and surface the "using approximate location" hint.
+ * Hard cap on how long we will wait for a fresh GPS fix. Cold GPS on a
+ * real Android device can take 15-60s — that hangs every category screen
+ * because the nearby-pros query is gated on coords. We'd rather show
+ * Jaipur-center results in <4s than a spinner forever.
+ */
+const COORDS_TIMEOUT_MS = 4000;
+
+/** Accept a cached fix up to 5 minutes old — good enough for "nearby pros". */
+const LAST_KNOWN_MAX_AGE_MS = 5 * 60 * 1000;
+
+/**
+ * Ask for foreground location permission and return the current position.
+ * Returns null if the user denies, the GPS times out, or the OS errors —
+ * callers should fall back to FALLBACK_COORDS and surface the "using
+ * approximate location" hint.
+ *
+ * Two-step strategy: instant last-known position first, then a fresh fix
+ * with a hard timeout. Without the timeout, a cold GPS hangs the screen.
  */
 export async function getCurrentCoords(): Promise<UserCoords | null> {
   const { status } = await Location.requestForegroundPermissionsAsync();
   if (status !== 'granted') return null;
 
-  const pos = await Location.getCurrentPositionAsync({
-    accuracy: Location.Accuracy.Balanced,
-  });
-  return { lat: pos.coords.latitude, lng: pos.coords.longitude };
+  const last = await Location.getLastKnownPositionAsync({
+    maxAge: LAST_KNOWN_MAX_AGE_MS,
+  }).catch(() => null);
+  if (last) {
+    return { lat: last.coords.latitude, lng: last.coords.longitude };
+  }
+
+  const fresh = await Promise.race<UserCoords | null>([
+    Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced })
+      .then((p) => ({ lat: p.coords.latitude, lng: p.coords.longitude }))
+      .catch(() => null),
+    new Promise<null>((resolve) => setTimeout(() => resolve(null), COORDS_TIMEOUT_MS)),
+  ]);
+  return fresh;
 }
 
 /**

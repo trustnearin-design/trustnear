@@ -1,21 +1,64 @@
 import { Hono } from 'hono';
 import { prisma } from '@sevalink/db';
 import { ForbiddenError, NotFoundError } from '@sevalink/types';
-import { authenticate, type AuthContext } from '../../middleware/authenticate.js';
+import { authenticate, authorize, type AuthContext } from '../../middleware/authenticate.js';
 import { validator } from '../../shared/validator.js';
 import { success } from '../../shared/responses.js';
-import { NearbyQuerySchema, ProIdParamSchema } from './schemas.js';
-import { findNearbyPros, getProDetail } from './service.js';
+import {
+  AvailabilityInputSchema,
+  MyJobsQuerySchema,
+  NearbyQuerySchema,
+  ProIdParamSchema,
+} from './schemas.js';
+import { findNearbyPros, getProDetail, listFeaturedPros } from './service.js';
+import { getMyJobs, getMyProfile, getMyTodaySummary, setMyAvailability } from './me-service.js';
 import { getTrustSnapshot } from '../trust-score/service.js';
 
 const pros = new Hono<AuthContext>();
 
 /**
- * GET /api/v1/pros/me/trust-score — current pro's score breakdown + recent events.
- * Protected: requires JWT, role=professional.
- *
- * IMPORTANT: defined BEFORE /:id so "me" doesn't get matched as a UUID.
+ * Pro-self endpoints — all require role=professional. Defined BEFORE /:id
+ * so "me" doesn't get matched as a UUID path param.
  */
+
+pros.get('/me', authenticate, authorize('professional'), async (c) => {
+  const user = c.get('user');
+  const profile = await getMyProfile(user.sub);
+  return success(c, profile);
+});
+
+pros.patch(
+  '/me/availability',
+  authenticate,
+  authorize('professional'),
+  validator('json', AvailabilityInputSchema),
+  async (c) => {
+    const user = c.get('user');
+    const { status } = c.req.valid('json');
+    const result = await setMyAvailability(user.sub, status);
+    return success(c, result);
+  },
+);
+
+pros.get('/me/today', authenticate, authorize('professional'), async (c) => {
+  const user = c.get('user');
+  const summary = await getMyTodaySummary(user.sub);
+  return success(c, summary);
+});
+
+pros.get(
+  '/me/jobs',
+  authenticate,
+  authorize('professional'),
+  validator('query', MyJobsQuerySchema),
+  async (c) => {
+    const user = c.get('user');
+    const q = c.req.valid('query');
+    const jobs = await getMyJobs(user.sub, q.segment, q.limit);
+    return success(c, { jobs, count: jobs.length, segment: q.segment });
+  },
+);
+
 pros.get('/me/trust-score', authenticate, async (c) => {
   const user = c.get('user');
   if (user.role !== 'professional') {
@@ -55,6 +98,18 @@ pros.get('/nearby', validator('query', NearbyQuerySchema), async (c) => {
       radiusKm: q.radiusKm,
     },
   });
+});
+
+/**
+ * GET /api/v1/pros/featured?limit=N
+ * Top professionals across the platform by trust score — powers the
+ * "Top Verified Pros" circular-avatar strip on the customer home.
+ * Defined BEFORE /:id so "featured" doesn't get matched as a UUID.
+ */
+pros.get('/featured', async (c) => {
+  const limit = Math.min(Math.max(Number(c.req.query('limit') ?? 10), 1), 30);
+  const pros = await listFeaturedPros(limit);
+  return success(c, { pros, count: pros.length });
 });
 
 /**

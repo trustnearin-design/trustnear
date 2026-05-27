@@ -12,3 +12,12 @@ export const NearbyQuerySchema = z.object({
 export const ProIdParamSchema = z.object({
   id: UuidSchema,
 });
+
+export const AvailabilityInputSchema = z.object({
+  status: z.enum(['online', 'offline', 'busy']),
+});
+
+export const MyJobsQuerySchema = z.object({
+  segment: z.enum(['pending', 'active', 'history']).default('active'),
+  limit: z.coerce.number().int().min(1).max(50).default(20),
+});

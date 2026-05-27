@@ -116,6 +116,69 @@ categories.get('/tree', async (c) => {
 });
 
 /**
+ * GET /api/v1/categories/search?q=...&limit=20
+ *
+ * Free-text search across active categories. Matches against name,
+ * shortPitch, and searchKeywords (Postgres array). Scoring boosts
+ * prefix-matches, then in-name matches, then keyword matches; leaves
+ * are nudged above parents because users typically search for a
+ * service ("home cleaning"), not a hub ("home care").
+ *
+ * Empty / very-short q returns empty results — the customer app keeps
+ * the recent-searches list visible until q.length >= 2.
+ */
+categories.get('/search', async (c) => {
+  const q = (c.req.query('q') ?? '').trim();
+  const limit = Math.min(Math.max(Number(c.req.query('limit') ?? 20) || 20, 1), 50);
+
+  if (q.length < 2) {
+    return success(c, { results: [], count: 0, query: q });
+  }
+
+  const all = await prisma.serviceCategory.findMany({
+    where: { isActive: true, deletedAt: null },
+    select: {
+      id: true,
+      slug: true,
+      parentId: true,
+      name: true,
+      heroImageUrl: true,
+      shortPitch: true,
+      basePrice: true,
+      priceUnit: true,
+      minDurationMinutes: true,
+      searchKeywords: true,
+      parent: { select: { id: true, slug: true, name: true } },
+    },
+    orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+  });
+
+  const ql = q.toLowerCase();
+  const scored = all
+    .map((cat) => {
+      const nameL = cat.name.toLowerCase();
+      const pitchL = (cat.shortPitch ?? '').toLowerCase();
+      const kwHit = cat.searchKeywords.some((k) => k.toLowerCase().includes(ql));
+      let score = 0;
+      if (nameL.startsWith(ql)) score += 100;
+      else if (nameL.includes(ql)) score += 50;
+      if (kwHit) score += 30;
+      if (pitchL.includes(ql)) score += 10;
+      if (cat.parentId) score += 5;
+      return { cat, score };
+    })
+    .filter((x) => x.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit)
+    .map(({ cat }) => {
+      const { searchKeywords: _kw, ...rest } = cat;
+      return rest;
+    });
+
+  return success(c, { results: scored, count: scored.length, query: q });
+});
+
+/**
  * GET /api/v1/categories/:slug
  *
  * Returns the category (parent or leaf). If parent, embeds children;

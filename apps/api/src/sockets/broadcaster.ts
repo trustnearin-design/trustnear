@@ -45,3 +45,27 @@ export function broadcastBookingStatus(bookingId: string, status: string): void 
     message: STATUS_MESSAGES[status] ?? `Status: ${status}`,
   });
 }
+
+/**
+ * Push a fresh job-match alert to a specific Pro user. The Pro app's root
+ * listener catches this and pops a full-screen alarm modal (countdown +
+ * audio + vibration) until the pro accepts or declines. Safe to call from
+ * anywhere — no-op if socket server not yet up.
+ */
+export function broadcastJobNewMatch(
+  professionalUserId: string,
+  payload: Parameters<ServerToClientEvents['job:new-match']>[0],
+): void {
+  if (!serverRef) return;
+  serverRef.to(ROOMS.user(professionalUserId)).emit('job:new-match', payload);
+}
+
+/**
+ * Tell a Pro to dismiss their ringing overlay for a specific booking.
+ * Fires when the booking left the matched state without the pro acting
+ * (customer cancel, admin intervention).
+ */
+export function broadcastJobMatchCancelled(professionalUserId: string, bookingId: string): void {
+  if (!serverRef) return;
+  serverRef.to(ROOMS.user(professionalUserId)).emit('job:match-cancelled', { bookingId });
+}

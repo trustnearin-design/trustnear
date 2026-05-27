@@ -1,6 +1,7 @@
 import '../global.css';
 
 import { useEffect, useState } from 'react';
+import { Text } from 'react-native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -8,6 +9,14 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import * as SplashScreen from 'expo-splash-screen';
 import * as Notifications from 'expo-notifications';
+import {
+  useFonts,
+  PlusJakartaSans_400Regular,
+  PlusJakartaSans_500Medium,
+  PlusJakartaSans_600SemiBold,
+  PlusJakartaSans_700Bold,
+  PlusJakartaSans_800ExtraBold,
+} from '@expo-google-fonts/plus-jakarta-sans';
 import { bootstrapAuth, useAuthStore } from '../src/stores/auth';
 import { registerPushTokenWithBackend } from '../src/lib/notifications';
 
@@ -39,7 +48,7 @@ function useAuthRouteGuard(ready: boolean) {
     if (isAuthed && (inAuthGroup || (!inAppGroup && !inAuthGroup))) {
       router.replace('/(app)');
     } else if (!isAuthed && (inAppGroup || (!inAuthGroup && !inAppGroup))) {
-      router.replace('/(auth)/phone');
+      router.replace('/(auth)/welcome');
     }
   }, [ready, isAuthed, segments, router]);
 }
@@ -84,8 +93,26 @@ function usePushNotifications(ready: boolean): void {
 
 export default function RootLayout() {
   const [ready, setReady] = useState(false);
-  useAuthRouteGuard(ready);
-  usePushNotifications(ready);
+  const [fontsLoaded] = useFonts({
+    PlusJakartaSans_400Regular,
+    PlusJakartaSans_500Medium,
+    PlusJakartaSans_600SemiBold,
+    PlusJakartaSans_700Bold,
+    PlusJakartaSans_800ExtraBold,
+  });
+  useAuthRouteGuard(ready && fontsLoaded);
+  usePushNotifications(ready && fontsLoaded);
+
+  useEffect(() => {
+    if (fontsLoaded) {
+      const TextWithDefaults = Text as unknown as { defaultProps?: { style?: object } };
+      TextWithDefaults.defaultProps = TextWithDefaults.defaultProps ?? {};
+      TextWithDefaults.defaultProps.style = [
+        TextWithDefaults.defaultProps.style ?? {},
+        { fontFamily: 'PlusJakartaSans_500Medium', color: '#1A1226' },
+      ];
+    }
+  }, [fontsLoaded]);
 
   useEffect(() => {
     bootstrapAuth()
@@ -96,7 +123,7 @@ export default function RootLayout() {
       });
   }, []);
 
-  if (!ready) return null;
+  if (!ready || !fontsLoaded) return null;
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>

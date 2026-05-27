@@ -5,7 +5,7 @@ import type { Server as HTTPServer } from 'node:http';
 import { env } from '../env.js';
 import { logger } from '../logger.js';
 import { authenticateSocket, type AppSocket } from './auth.js';
-import { autoJoinAdmin, joinBookingRoom, leaveBookingRoom } from './rooms.js';
+import { autoJoinAdmin, autoJoinUser, joinBookingRoom, leaveBookingRoom } from './rooms.js';
 import { registerLocationHandler } from './handlers/location.js';
 import { registerChatHandler } from './handlers/chat.js';
 import { registerSosHandler } from './handlers/sos.js';
@@ -86,6 +86,7 @@ export async function createSocketServer(httpServer: HTTPServer): Promise<{
     logger.info({ socketId: s.id, userId: s.data.userId, role: s.data.role }, 'socket: connected');
 
     void autoJoinAdmin(s);
+    void autoJoinUser(s);
 
     // Room management
     s.on('booking:join', async ({ bookingId }, ack) => {

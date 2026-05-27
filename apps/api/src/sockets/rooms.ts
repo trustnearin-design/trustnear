@@ -63,3 +63,16 @@ export async function autoJoinAdmin(socket: AppSocket): Promise<void> {
     logger.debug({ socketId: socket.id }, 'socket: admin auto-joined admin room');
   }
 }
+
+/**
+ * Auto-join the per-user room so user-targeted events (e.g. `job:new-match`)
+ * reach this socket regardless of which screen the user is on. Every
+ * authenticated socket gets this — the broadcaster decides which userId to
+ * emit to, not the client.
+ */
+export async function autoJoinUser(socket: AppSocket): Promise<void> {
+  const room = ROOMS.user(socket.data.userId);
+  await socket.join(room);
+  socket.data.joinedRooms.add(room);
+  logger.debug({ socketId: socket.id, userId: socket.data.userId }, 'socket: joined user room');
+}

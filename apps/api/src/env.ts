@@ -62,6 +62,14 @@ const EnvSchema = z.object({
   RAZORPAY_KEY_SECRET: emptyToUndefined,
   RAZORPAY_WEBHOOK_SECRET: emptyToUndefined,
 
+  // Setu — KYC verification suite (DigiLocker / PAN / BAV Pennyless).
+  // One credential set is valid for all KYC products on the same account.
+  SETU_ENV: z.enum(['sandbox', 'production']).default('sandbox'),
+  SETU_BASE_URL: z.string().url().default('https://dg-sandbox.setu.co'),
+  SETU_CLIENT_ID: emptyToUndefined,
+  SETU_CLIENT_SECRET: emptyToUndefined,
+  SETU_PRODUCT_INSTANCE_ID: emptyToUndefined,
+
   AWS_REGION: z.string().default('ap-south-1'),
   AWS_ACCESS_KEY_ID: emptyToUndefined,
   AWS_SECRET_ACCESS_KEY: emptyToUndefined,
@@ -70,6 +78,13 @@ const EnvSchema = z.object({
 
   // URLs
   API_BASE_URL: z.string().url().default('http://localhost:3000'),
+
+  // CORS — comma-separated list of allowed origins for production.
+  // Examples: "https://admin.trustnear.in,https://trustnear.in,https://www.trustnear.in"
+  // In development/staging the API reflects any origin (browser still requires
+  // a value, but native mobile clients don't send Origin headers so this is moot
+  // for them anyway). Production hardening requires this to be set explicitly.
+  CORS_ALLOWED_ORIGINS: z.string().optional(),
 });
 
 function parseEnv(): z.infer<typeof EnvSchema> {

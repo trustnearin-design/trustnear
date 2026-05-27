@@ -217,3 +217,64 @@ export async function getProDetail(professionalId: string) {
   }
   return pro;
 }
+
+export interface FeaturedPro {
+  id: string;
+  fullName: string;
+  profilePhoto: string | null;
+  trustBadge: string;
+  trustScore: number;
+  yearsExperience: number;
+  professionalTitle: string | null;
+  primaryCategory: string | null;
+}
+
+/**
+ * Top professionals across all categories — powers the "Top Verified Pros
+ * Near You" circular-avatar strip on the customer home. Filters require
+ * a profile photo so the round avatar always has visual weight. Sort by
+ * trustScore desc, tiebreak on totalBookings.
+ *
+ * Geographic filter intentionally omitted in v1 — the strip is meant to
+ * showcase the platform's verification quality, not strictly "near me".
+ * A geo-aware variant can be added when the home knows the user's pin.
+ */
+export async function listFeaturedPros(limit = 10): Promise<FeaturedPro[]> {
+  const rows = await prisma.professional.findMany({
+    where: {
+      deletedAt: null,
+      user: {
+        isActive: true,
+        deletedAt: null,
+        profilePhoto: { not: null },
+      },
+    },
+    orderBy: [{ trustScore: 'desc' }, { totalBookings: 'desc' }],
+    take: limit,
+    select: {
+      id: true,
+      professionalTitle: true,
+      trustBadge: true,
+      trustScore: true,
+      yearsExperience: true,
+      user: { select: { fullName: true, profilePhoto: true } },
+      serviceOfferings: {
+        where: { isActive: true },
+        orderBy: { experienceYears: 'desc' },
+        take: 1,
+        select: { category: { select: { name: true } } },
+      },
+    },
+  });
+
+  return rows.map((r) => ({
+    id: r.id,
+    fullName: r.user.fullName,
+    profilePhoto: r.user.profilePhoto,
+    trustBadge: r.trustBadge,
+    trustScore: Number(r.trustScore),
+    yearsExperience: r.yearsExperience,
+    professionalTitle: r.professionalTitle,
+    primaryCategory: r.serviceOfferings[0]?.category.name ?? null,
+  }));
+}

@@ -4,11 +4,14 @@ import { apiFetch } from './client';
 export interface Category {
   id: string;
   slug: string;
+  parentId?: string | null;
   name: string;
   iconUrl: string | null;
   bannerUrl: string | null;
+  heroImageUrl?: string | null;
   professionalTitle: string;
   description: string;
+  shortPitch?: string | null;
   /** Stored in paise. Use formatRupees() to display. */
   basePrice: number;
   priceUnit: string;
@@ -18,6 +21,40 @@ export interface Category {
 
 export interface CategoryDetail extends Category {
   searchKeywords: string[];
+  parent?: { id: string; slug: string; name: string; heroImageUrl: string | null } | null;
+  children?: Array<{
+    id: string;
+    slug: string;
+    name: string;
+    heroImageUrl: string | null;
+    shortPitch: string | null;
+    basePrice: number;
+    priceUnit: string;
+  }>;
+}
+
+/** Leaf shape inside a parent's tree entry (GET /categories/tree). */
+export interface CategoryTreeChild {
+  id: string;
+  slug: string;
+  name: string;
+  heroImageUrl: string | null;
+  shortPitch: string | null;
+  professionalTitle: string;
+  basePrice: number;
+  priceUnit: string;
+  minDurationMinutes: number;
+}
+
+export interface CategoryTreeParent {
+  id: string;
+  slug: string;
+  name: string;
+  heroImageUrl: string | null;
+  bannerUrl: string | null;
+  shortPitch: string | null;
+  description: string;
+  children: CategoryTreeChild[];
 }
 
 export interface NearbyPro {
@@ -109,12 +146,69 @@ export function useCategories(featured?: boolean) {
   });
 }
 
+/**
+ * Tree view used by the home tab — parent tiles each carrying their
+ * active children. Inactive children are filtered server-side.
+ */
+export function useCategoryTree() {
+  return useQuery({
+    queryKey: ['categories.tree'],
+    queryFn: () =>
+      apiFetch<{ tree: CategoryTreeParent[]; count: number }>('/categories/tree', { auth: false }),
+    staleTime: 5 * 60_000,
+  });
+}
+
+/** Children of a single parent — used by the parent-detail screen. */
+export function useChildrenByParent(parentSlug: string | undefined) {
+  return useQuery({
+    queryKey: ['categories.children', parentSlug],
+    queryFn: () =>
+      apiFetch<{ categories: Category[]; count: number }>(`/categories?parentSlug=${parentSlug}`, {
+        auth: false,
+      }),
+    enabled: !!parentSlug,
+    staleTime: 5 * 60_000,
+  });
+}
+
 export function useCategoryDetail(slug: string | undefined) {
   return useQuery({
     queryKey: ['category', slug],
     queryFn: () => apiFetch<CategoryDetail>(`/categories/${slug}`, { auth: false }),
     enabled: !!slug,
     staleTime: 5 * 60_000,
+  });
+}
+
+export interface CategorySearchHit {
+  id: string;
+  slug: string;
+  parentId: string | null;
+  name: string;
+  heroImageUrl: string | null;
+  shortPitch: string | null;
+  basePrice: number;
+  priceUnit: string;
+  minDurationMinutes: number;
+  parent: { id: string; slug: string; name: string } | null;
+}
+
+/**
+ * Free-text category search. Returns empty until q.length >= 2.
+ * 250ms debounce is the caller's responsibility (search screen).
+ */
+export function useSearchCategories(q: string) {
+  const query = q.trim();
+  return useQuery({
+    queryKey: ['categories.search', query],
+    queryFn: () =>
+      apiFetch<{ results: CategorySearchHit[]; count: number; query: string }>(
+        `/categories/search?q=${encodeURIComponent(query)}`,
+        { auth: false },
+      ),
+    enabled: query.length >= 2,
+    staleTime: 60_000,
   });
 }
 
@@ -155,5 +249,31 @@ export function useProDetail(id: string | undefined) {
     queryFn: () => apiFetch<ProDetail>(`/pros/${id}`),
     enabled: !!id,
     staleTime: 60_000,
+  });
+}
+
+export interface FeaturedPro {
+  id: string;
+  fullName: string;
+  profilePhoto: string | null;
+  trustBadge: 'none' | 'bronze' | 'silver' | 'gold' | 'platinum';
+  trustScore: number;
+  yearsExperience: number;
+  professionalTitle: string | null;
+  primaryCategory: string | null;
+}
+
+/**
+ * Top platform pros — used by the "Top Verified Pros" circular strip
+ * on customer home. Public endpoint, no auth required.
+ */
+export function useFeaturedPros(limit = 10) {
+  return useQuery({
+    queryKey: ['pros.featured', limit],
+    queryFn: () =>
+      apiFetch<{ pros: FeaturedPro[]; count: number }>(`/pros/featured?limit=${limit}`, {
+        auth: false,
+      }),
+    staleTime: 2 * 60_000,
   });
 }

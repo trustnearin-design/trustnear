@@ -7,6 +7,7 @@ import { logger } from './logger.js';
 import { redis } from './redis.js';
 import { createApp } from './app.js';
 import { createSocketServer } from './sockets/server.js';
+import { seedDefaultTemplates } from './features/cms/templates-service.js';
 
 // ─── Sentry — initialize before anything else if DSN configured ──────
 if (env.SENTRY_DSN) {
@@ -32,6 +33,13 @@ const server = serve(
     );
   },
 );
+
+// ─── Seed default notification templates (idempotent) ───────────────
+// Best-effort: if Neon is unreachable at boot we just log and continue —
+// the dispatcher's hardcoded fallbacks keep notifications working.
+seedDefaultTemplates().catch((err) => {
+  logger.warn({ err }, 'cms: seedDefaultTemplates failed (continuing)');
+});
 
 // ─── Attach Socket.IO to the same HTTP server ────────────────────────
 let socketCleanup: (() => Promise<void>) | null = null;

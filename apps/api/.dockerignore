@@ -1,0 +1,44 @@
+# Anything Docker doesn't need in the build context, regardless of which
+# COPY runs. Keeps build context small and avoids leaking secrets.
+
+node_modules
+**/node_modules
+.turbo
+**/.turbo
+dist
+**/dist
+.next
+**/.next
+.expo
+**/.expo
+
+# Env files — secrets come from runtime env vars on App Runner.
+.env
+.env.*
+!.env.production.example
+
+# Dev / local caches
+*.log
+*.tsbuildinfo
+coverage
+.nyc_output
+.vscode
+.idea
+.DS_Store
+
+# Git + CI
+.git
+.github
+.gitignore
+.husky
+
+# Mobile apps + admin — API image doesn't need them.
+apps/customer
+apps/pro
+apps/admin
+
+# Docs / README / scripts unrelated to runtime
+README.md
+docs
+scripts
+design

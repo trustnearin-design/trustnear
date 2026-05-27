@@ -24,6 +24,7 @@ import {
 } from '../notifications/service.js';
 import { calculatePrice } from './pricing.js';
 import { assertTransition, isTerminal } from './state-machine.js';
+import { clearMatchState, handleProDeclined, sendJobAlert } from './match-orchestrator.js';
 
 const BOOKING_OTP_TTL_MINUTES = 60; // OTP burns 60 min after arrival
 const MAX_BOOKING_ADVANCE_DAYS = 7;
@@ -169,6 +170,17 @@ export async function createBooking(input: CreateBookingInput): Promise<{
   // Broadcast initial status so connected clients see immediately
   broadcastBookingStatus(booking.id, booking.status);
 
+  // If we matched a pro at creation, ring them with the full-screen alert
+  // and start the 60s response window. Best-effort — never fail the
+  // customer's create flow over this.
+  if (matchedProId) {
+    void sendJobAlert({ bookingId: booking.id, professionalId: matchedProId }).catch(
+      (err: unknown) => {
+        logger.error({ err, bookingId: booking.id }, 'match: alert failed');
+      },
+    );
+  }
+
   return {
     bookingId: booking.id,
     bookingNumber: booking.bookingNumber,
@@ -254,6 +266,27 @@ export async function transitionBooking(args: {
   void applyTransitionNotifications(booking, updated.status).catch((err: unknown) => {
     logger.error({ err, bookingId: updated.id }, 'notify: post-transition dispatch failed');
   });
+
+  // Match-orchestrator hooks — keep the alert window honest:
+  //   confirmed       → pro accepted, kill the timer and forget rejections.
+  //   cancelled_pro   → pro declined, mark them out and rematch.
+  //   cancelled_customer / disputed → drop any pending alert state.
+  if (updated.status === 'confirmed') {
+    void clearMatchState(updated.id).catch((err: unknown) => {
+      logger.error({ err, bookingId: updated.id }, 'match: clear state on accept failed');
+    });
+  } else if (updated.status === 'cancelled_pro' && booking.professionalId) {
+    void handleProDeclined({
+      bookingId: updated.id,
+      professionalId: booking.professionalId,
+    }).catch((err: unknown) => {
+      logger.error({ err, bookingId: updated.id }, 'match: handleProDeclined failed');
+    });
+  } else if (updated.status === 'cancelled_customer' || updated.status === 'disputed') {
+    void clearMatchState(updated.id).catch((err: unknown) => {
+      logger.error({ err, bookingId: updated.id }, 'match: clear state on customer cancel failed');
+    });
+  }
 
   broadcastBookingStatus(updated.id, updated.status);
 

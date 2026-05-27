@@ -2,9 +2,13 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { secureHeaders } from 'hono/secure-headers';
 import { compress } from 'hono/compress';
+import { serveStatic } from '@hono/node-server/serve-static';
+import { env } from './env.js';
+import { logger } from './logger.js';
 import { requestIdMiddleware } from './middleware/request-id.js';
 import { loggerMiddleware } from './middleware/logger.js';
 import { errorHandler } from './middleware/error-handler.js';
+import { rateLimit } from './middleware/rate-limit.js';
 import healthRoutes from './features/health/routes.js';
 import authRoutes from './features/auth/routes.js';
 import usersRoutes from './features/users/routes.js';
@@ -15,6 +19,10 @@ import reviewsRoutes from './features/reviews/routes.js';
 import paymentsRoutes from './features/payments/routes.js';
 import walletRoutes from './features/wallet/routes.js';
 import notificationsRoutes from './features/notifications/routes.js';
+import verifyRoutes from './features/verify/routes.js';
+import adminRoutes from './features/admin/routes.js';
+import bannersRoutes from './features/banners/routes.js';
+import cmsPublicRoutes from './features/cms/public-routes.js';
 
 /**
  * App factory. Pure construction — boot/listen happens in server.ts.
@@ -26,17 +34,79 @@ export function createApp(): Hono<{ Variables: { requestId: string } }> {
   // Global middleware (order matters)
   app.use('*', requestIdMiddleware);
   app.use('*', loggerMiddleware);
+
+  // CORP override for /uploads/* MUST be registered before secureHeaders
+  // so its post-next phase runs AFTER secureHeaders's (outer wins).
+  // Otherwise secureHeaders pins CORP back to same-origin and admin
+  // (:3001) + customer/pro apps (different origins) can't load images.
+  app.use('/uploads/*', async (c, next) => {
+    await next();
+    c.header('Cross-Origin-Resource-Policy', 'cross-origin');
+  });
+
   app.use('*', secureHeaders());
   app.use('*', compress());
+
+  // CORS — production whitelists explicit origins via CORS_ALLOWED_ORIGINS.
+  // Dev/staging reflect any origin so local Expo + admin web on different
+  // ports can work without ceremony. Native mobile clients (Expo Go,
+  // standalone APK/IPA) don't send Origin headers so CORS is moot for them
+  // either way.
+  const allowedOrigins = (env.CORS_ALLOWED_ORIGINS ?? '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const isProd = env.NODE_ENV === 'production';
+  if (isProd && allowedOrigins.length === 0) {
+    logger.warn(
+      'CORS_ALLOWED_ORIGINS is empty in production — browser clients will be blocked. Set it to a comma-separated whitelist.',
+    );
+  }
   app.use(
     '*',
     cors({
-      origin: (origin) => origin ?? '*',
+      origin: (origin) => {
+        if (!origin) return ''; // non-browser client (mobile, server-to-server)
+        if (!isProd) return origin; // dev/staging — reflect
+        return allowedOrigins.includes(origin) ? origin : '';
+      },
       credentials: true,
       allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
       allowHeaders: ['Content-Type', 'Authorization', 'X-Request-Id', 'X-Idempotency-Key'],
-      exposeHeaders: ['X-Request-Id'],
+      exposeHeaders: [
+        'X-Request-Id',
+        'X-RateLimit-Limit',
+        'X-RateLimit-Remaining',
+        'X-RateLimit-Reset',
+      ],
       maxAge: 600,
+    }),
+  );
+
+  // Static — locally-uploaded admin media (categories, banners, etc).
+  // Public read; uploads are admin-only (gated in /api/v1/admin/uploads).
+  // When S3 is configured, files go there directly and this never serves them.
+  app.use('/uploads/*', serveStatic({ root: './' }));
+
+  // Rate limits — applied BEFORE routes. Health is intentionally exempt so
+  // App Runner / monitoring don't get throttled. Auth is strictest because
+  // OTP send/verify are the most abusable endpoints (SMS cost + brute force).
+  // Authenticated APIs get a more generous limit; we identify by user when
+  // available, falling back to IP for unauthenticated discovery calls.
+  app.use('/api/v1/auth/*', rateLimit({ windowMs: 60_000, max: 20, keyPrefix: 'auth' }));
+  app.use(
+    '/api/v1/*',
+    rateLimit({
+      windowMs: 60_000,
+      max: 120,
+      keyPrefix: 'api',
+      getKey: (c) => {
+        const userId = c.get('userId' as never) as string | undefined;
+        if (userId) return `u:${userId}`;
+        const fwd = c.req.header('x-forwarded-for');
+        const ip = fwd?.split(',')[0]?.trim() ?? c.req.header('x-real-ip') ?? 'anon';
+        return `ip:${ip}`;
+      },
     }),
   );
 
@@ -51,6 +121,10 @@ export function createApp(): Hono<{ Variables: { requestId: string } }> {
   app.route('/api/v1/payments', paymentsRoutes);
   app.route('/api/v1/wallet', walletRoutes);
   app.route('/api/v1/notifications', notificationsRoutes);
+  app.route('/api/v1/verify', verifyRoutes);
+  app.route('/api/v1/admin', adminRoutes);
+  app.route('/api/v1/banners', bannersRoutes);
+  app.route('/api/v1', cmsPublicRoutes);
 
   // Root
   app.get('/', (c) =>

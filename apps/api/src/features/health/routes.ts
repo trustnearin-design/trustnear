@@ -7,6 +7,12 @@ import { success } from '../../shared/responses.js';
 const health = new Hono();
 
 /**
+ * Root health probe — App Runner, ALB, and most cloud load balancers default
+ * to GET /health (no sub-path). Aliased to /live so naive callers don't 404.
+ */
+health.get('/', (c) => success(c, { status: 'ok', uptime: process.uptime(), pid: process.pid }));
+
+/**
  * Liveness probe — cheap, no external deps. ECS/k8s uses this to decide
  * whether to restart the container.
  */

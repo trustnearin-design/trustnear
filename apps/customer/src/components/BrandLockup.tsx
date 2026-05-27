@@ -1,44 +1,29 @@
-import { View, Text } from 'react-native';
-import Svg, { Path } from 'react-native-svg';
+import { View, Text, Image, ImageSourcePropType } from 'react-native';
 import { colors } from '../theme/colors';
 
-/**
- * TrustNear shield mark — gold shield with white checkmark.
- * Renders inline via react-native-svg so it scales crisply at any size
- * and theme switches without raster assets.
- *
- * Use stand-alone as a logo (e.g. on splash) or inside [[BrandLockup]]
- * for the full wordmark stack.
- */
-export function ShieldMark({ size = 56 }: { size?: number }) {
-  return (
-    <Svg width={size} height={size * 1.2} viewBox="0 0 40 48" fill="none">
-      <Path
-        d="M20 0 C28 2, 36 4, 36 8 L36 26 C36 38, 28 44, 20 48 C12 44, 4 38, 4 26 L4 8 C4 4, 12 2, 20 0 Z"
-        fill={colors.accent.DEFAULT}
-      />
-      <Path
-        d="M13 24 L18 30 L28 17"
-        stroke="#FFFFFF"
-        strokeWidth="3.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        fill="none"
-      />
-    </Svg>
-  );
-}
-
 export type BrandTone = 'dark-on-light' | 'light-on-dark';
-export type BrandSize = 'sm' | 'md' | 'lg';
+export type BrandSize = 'sm' | 'md' | 'lg' | 'xl';
+
+const LOGO_LIGHT_BG = require('../../assets/logo-on-white.png');
+const LOGO_DARK_BG = require('../../assets/splash-icon.png');
+
+const SIZE_PX: Record<BrandSize, number> = {
+  sm: 80,
+  md: 120,
+  lg: 180,
+  xl: 240,
+};
 
 /**
- * Full TrustNear brand lockup: shield + wordmark + tagline, stacked.
+ * TrustNear brand lockup — stacked "trust / near." wordmark with coral dot.
+ * Renders the master PNG (light or dark tone) at the requested size.
  *
- *   tone = 'light-on-dark' — use on a navy hero or brand-colored surface
- *   tone = 'dark-on-light' — default; wordmark navy, tagline ink-muted
+ * The PNG is the source of truth — kept in `assets/` and synced via
+ * `scripts/install-brand-assets.mjs`. To tweak kerning, color, or weight,
+ * regenerate the PNG and rerun the script — this component just scales it.
  *
- * Size scales each piece together so proportions stay consistent.
+ *   tone = 'dark-on-light'  → purple lockup on cream/white surface
+ *   tone = 'light-on-dark'  → white lockup on plum surface
  */
 export function BrandLockup({
   tone = 'dark-on-light',
@@ -50,39 +35,66 @@ export function BrandLockup({
   showTagline?: boolean;
 }) {
   const isLightOnDark = tone === 'light-on-dark';
-  const shieldSize = size === 'lg' ? 56 : size === 'md' ? 44 : 32;
-  const wordmarkSize = size === 'lg' ? 34 : size === 'md' ? 28 : 22;
-  const taglineSize = size === 'lg' ? 11 : 10;
-  const wordmarkColor = isLightOnDark ? '#FFFFFF' : colors.brand.DEFAULT;
-  const taglineColor = isLightOnDark ? colors.brand[100] : colors.ink.muted;
+  const source: ImageSourcePropType = isLightOnDark ? LOGO_DARK_BG : LOGO_LIGHT_BG;
+  const width = SIZE_PX[size];
+  const height = width;
+
+  const taglineSize = size === 'xl' ? 13 : size === 'lg' ? 11 : 10;
+  const taglineColor = isLightOnDark ? colors.brand[200] : colors.brand[700];
 
   return (
     <View style={{ alignItems: 'center' }}>
-      <ShieldMark size={shieldSize} />
-      <Text
-        style={{
-          fontSize: wordmarkSize,
-          fontWeight: '800',
-          letterSpacing: -0.8,
-          color: wordmarkColor,
-          marginTop: size === 'lg' ? 14 : 10,
-        }}
-      >
-        TrustNear
-      </Text>
+      <Image
+        source={source}
+        style={{ width, height }}
+        resizeMode="contain"
+        accessibilityLabel="TrustNear logo"
+      />
       {showTagline ? (
         <Text
           style={{
+            marginTop: 6,
             fontSize: taglineSize,
-            fontWeight: '700',
-            letterSpacing: 2,
+            fontWeight: '800',
+            letterSpacing: 2.2,
+            textTransform: 'uppercase',
             color: taglineColor,
-            marginTop: 4,
           }}
         >
-          VERIFIED PROS · NEAR YOU
+          Trusted home services
         </Text>
       ) : null}
     </View>
   );
+}
+
+/**
+ * Compact 1-line wordmark for app bars / email signatures / footers.
+ * Pass `tone='light-on-dark'` for plum-background contexts.
+ */
+export function BrandWordmark({
+  tone = 'dark-on-light',
+  height = 32,
+}: {
+  tone?: BrandTone;
+  height?: number;
+}) {
+  const source: ImageSourcePropType = tone === 'light-on-dark' ? LOGO_DARK_BG : LOGO_LIGHT_BG;
+  return (
+    <Image
+      source={source}
+      style={{ height, aspectRatio: 1 }}
+      resizeMode="contain"
+      accessibilityLabel="TrustNear"
+    />
+  );
+}
+
+/**
+ * Backward-compat shim — old code imported `ShieldMark` from this file.
+ * The shield mark is now baked into the master logo PNG, so this just
+ * renders the light-bg wordmark at the requested size.
+ */
+export function ShieldMark({ size = 56 }: { size?: number }) {
+  return <BrandWordmark tone="dark-on-light" height={size} />;
 }

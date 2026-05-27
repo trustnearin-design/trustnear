@@ -50,6 +50,39 @@ export interface ServerToClientEvents {
     message: string;
   }) => void;
 
+  /**
+   * Pushed to a Pro's user-scoped room when they're freshly assigned to a
+   * booking. The Pro app pops a full-screen alarm modal; the pro has
+   * `expiresAt - now` seconds to accept or the booking is auto-cancelled
+   * and re-matched to the next-best pro.
+   */
+  'job:new-match': (payload: {
+    bookingId: string;
+    bookingNumber: string;
+    /** Heartbeat deadline (ISO 8601) — the overlay loops its countdown
+     * ring at this cadence. Reaching zero is purely visual; the alert
+     * persists until the pro taps Accept or Decline. */
+    expiresAt: string;
+    customer: { fullName: string; profilePhoto: string | null };
+    category: { slug: string; name: string };
+    scheduledAt: string;
+    durationMinutes: number;
+    addressLine: string;
+    addressArea: string | null;
+    /** Approx distance from pro's last known location, in km, if known. */
+    distanceKm: number | null;
+    /** What the pro will take home (paise). */
+    proPayout: number;
+  }) => void;
+
+  /**
+   * Tell the assigned pro to dismiss the ringing overlay for this booking
+   * — fires when the customer cancels mid-ring, an admin intervenes, or
+   * the booking otherwise leaves the matched state without the pro acting.
+   * Without this the pro's phone would keep ringing on a dead booking.
+   */
+  'job:match-cancelled': (payload: { bookingId: string }) => void;
+
   /** Broadcast for in-booking chat */
   'chat:message': (payload: {
     bookingId: string;
@@ -92,6 +125,10 @@ export type InterServerEvents = Record<string, never>;
 export const ROOMS = {
   /** Per-booking room. Customer + assigned pro + admins. */
   booking: (id: string) => `booking:${id}`,
+  /** Per-user room. Used for user-targeted events like `job:new-match` that
+   * need to reach a specific user across whichever screen they have open
+   * (Pro app's root listener subscribes from anywhere in the app). */
+  user: (userId: string) => `user:${userId}`,
   /** Admin-only room receiving SOS alerts. */
   admin: 'admin:room',
 } as const;

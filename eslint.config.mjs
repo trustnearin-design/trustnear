@@ -17,6 +17,9 @@ export default [
       'packages/**',
       // The eslint config files themselves don't need linting
       '**/*.config.{js,mjs,cjs}',
+      // Root-level one-off scripts (ops utilities, brand asset installer)
+      // aren't in any tsconfig project so the typed parser would error.
+      'scripts/**',
     ],
   },
   ...nodeConfig,

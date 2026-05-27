@@ -14,6 +14,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { StatusBar } from 'expo-status-bar';
 import {
   customerCanCancel,
   isTerminalStatus,
@@ -78,7 +79,7 @@ export default function BookingDetailScreen() {
   if (isPending) {
     return (
       <SafeAreaView className="flex-1 items-center justify-center bg-surface">
-        <Stack.Screen options={{ title: 'Booking' }} />
+        <Stack.Screen options={{ headerShown: false }} />
         <ActivityIndicator color={colors.brand.DEFAULT} />
       </SafeAreaView>
     );
@@ -86,8 +87,8 @@ export default function BookingDetailScreen() {
   if (isError || !data) {
     return (
       <SafeAreaView className="flex-1 items-center justify-center bg-surface px-6">
-        <Stack.Screen options={{ title: 'Booking' }} />
-        <Text className="text-center text-sm text-danger">Couldn't load booking.</Text>
+        <Stack.Screen options={{ headerShown: false }} />
+        <Text className="text-center text-sm text-danger">Couldn&apos;t load booking.</Text>
         <Pressable onPress={() => void refetch()} className="mt-3">
           <Text className="text-sm font-semibold text-brand">Try again</Text>
         </Pressable>
@@ -96,8 +97,9 @@ export default function BookingDetailScreen() {
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-surface-muted" edges={['bottom']}>
-      <Stack.Screen options={{ title: `#${data.bookingNumber}` }} />
+    <View className="flex-1 bg-surface-muted">
+      <Stack.Screen options={{ headerShown: false }} />
+      <StatusBar style="light" />
 
       <ScrollView
         className="flex-1"
@@ -202,11 +204,12 @@ export default function BookingDetailScreen() {
         }}
         loading={cancelMut.isPending}
       />
-    </SafeAreaView>
+    </View>
   );
 }
 
 function StatusHero({ booking, justBooked }: { booking: BookingDetail; justBooked: boolean }) {
+  const router = useRouter();
   const tone = bookingStatusTone(booking.status);
   const bg =
     tone === 'success'
@@ -215,18 +218,57 @@ function StatusHero({ booking, justBooked }: { booking: BookingDetail; justBooke
         ? colors.danger
         : tone === 'progress'
           ? colors.brand.DEFAULT
-          : colors.brand[700];
+          : colors.brand[800];
   return (
-    <View style={{ backgroundColor: bg }} className="px-5 pb-5 pt-4">
-      <Text className="text-[11px] font-bold uppercase tracking-wider text-ink-inverse/80">
-        {justBooked ? 'Booking confirmed' : 'Current status'}
-      </Text>
-      <Text className="mt-1 text-2xl font-bold text-ink-inverse">
-        {bookingStatusLabel(booking.status)}
-      </Text>
-      <Text className="mt-1 text-xs text-ink-inverse/80">
-        {booking.category.name} · {formatScheduledAt(booking.scheduledAt)}
-      </Text>
+    <View style={{ backgroundColor: bg }}>
+      {/* Gold glow accent — works against any tone */}
+      <View
+        style={{
+          position: 'absolute',
+          top: -40,
+          right: -40,
+          width: 180,
+          height: 180,
+          borderRadius: 90,
+          backgroundColor: 'rgba(212,162,76,0.14)',
+        }}
+      />
+      <SafeAreaView edges={['top']}>
+        <View className="px-5 pb-5 pt-2">
+          <View className="flex-row items-center justify-between">
+            <Pressable
+              onPress={() => router.back()}
+              hitSlop={12}
+              className="h-10 w-10 items-center justify-center rounded-full"
+              style={{ backgroundColor: 'rgba(255,255,255,0.18)' }}
+            >
+              <Ionicons name="arrow-back" size={20} color="#FFFFFF" />
+            </Pressable>
+            <Text
+              className="text-[11px] font-bold uppercase tracking-[2px]"
+              style={{ color: 'rgba(255,255,255,0.85)' }}
+            >
+              #{booking.bookingNumber}
+            </Text>
+            <View style={{ width: 40 }} />
+          </View>
+
+          <View className="mt-5">
+            <Text
+              className="text-[10px] font-bold uppercase tracking-[2px]"
+              style={{ color: 'rgba(255,255,255,0.85)' }}
+            >
+              {justBooked ? 'Booking confirmed' : 'Current status'}
+            </Text>
+            <Text className="mt-1 text-[26px] font-bold text-ink-inverse">
+              {bookingStatusLabel(booking.status)}
+            </Text>
+            <Text className="mt-1 text-[13px]" style={{ color: 'rgba(255,255,255,0.85)' }}>
+              {booking.category.name} · {formatScheduledAt(booking.scheduledAt)}
+            </Text>
+          </View>
+        </View>
+      </SafeAreaView>
     </View>
   );
 }

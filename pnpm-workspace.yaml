@@ -14,5 +14,7 @@ allowBuilds:
   # It only builds on Solaris/macOS — skip on Linux (EAS builders) to avoid
   # a non-zero exit code in `pnpm install --frozen-lockfile`.
   dtrace-provider: false
+  # sharp is Next.js image optimization — prebuilt binaries, safe to allow.
+  sharp: true
 
 nodeLinker: hoisted

@@ -20,6 +20,7 @@ users.get('/me', authenticate, async (c) => {
       email: true,
       fullName: true,
       role: true,
+      adminRole: true,
       profilePhoto: true,
       city: true,
       area: true,

@@ -10,9 +10,10 @@ import {
   Platform,
   Alert,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { StatusBar } from 'expo-status-bar';
 import { useProDetail } from '../../../src/api/discovery';
 import { useCreateBooking } from '../../../src/api/bookings';
 import {
@@ -26,6 +27,7 @@ import { saveBookingOtp } from '../../../src/lib/bookingOtp';
 import { formatRupees, priceUnitLabel } from '../../../src/lib/format';
 import { colors } from '../../../src/theme/colors';
 import { Avatar } from '../../../src/components/Avatar';
+import { BrandLoadingScreen, CoralButton } from '../../../src/components/ui';
 
 interface TimeSlot {
   key: string;
@@ -73,6 +75,7 @@ const DURATION_PRESETS = [60, 90, 120, 180] as const;
 
 export default function BookExpertScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { expertId } = useLocalSearchParams<{ expertId: string }>();
   const expert = useProDetail(expertId);
   const createBooking = useCreateBooking();
@@ -183,16 +186,33 @@ export default function BookExpertScreen() {
   if (expert.isPending) {
     return (
       <SafeAreaView className="flex-1 items-center justify-center bg-surface">
-        <Stack.Screen options={{ title: 'Book expert' }} />
+        <Stack.Screen options={{ headerShown: false }} />
         <ActivityIndicator color={colors.brand.DEFAULT} />
       </SafeAreaView>
+    );
+  }
+  // First-paint branded overlay while we fetch coords + reverse-geocode the
+  // address. Without this the user sees a blank map shell and the inline
+  // "Locating…" text, which feels cheap. The overlay carries the wait with
+  // the logo + mascot + tagline (Toing / Swiggy pattern).
+  if (locating && !coords) {
+    return (
+      <>
+        <Stack.Screen options={{ headerShown: false }} />
+        <BrandLoadingScreen
+          eyebrow="Detecting your location"
+          address="Getting you closer to verified pros nearby…"
+        />
+      </>
     );
   }
   if (expert.isError || !expert.data) {
     return (
       <SafeAreaView className="flex-1 items-center justify-center bg-surface px-6">
-        <Stack.Screen options={{ title: 'Book expert' }} />
-        <Text className="text-center text-sm text-danger">Couldn't load expert. Try again.</Text>
+        <Stack.Screen options={{ headerShown: false }} />
+        <Text className="text-center text-sm text-danger">
+          Couldn&apos;t load expert. Try again.
+        </Text>
         <Pressable onPress={() => router.back()} className="mt-3">
           <Text className="text-sm font-semibold text-brand">Go back</Text>
         </Pressable>
@@ -203,8 +223,9 @@ export default function BookExpertScreen() {
   const pro = expert.data;
 
   return (
-    <SafeAreaView className="flex-1 bg-surface" edges={['bottom']}>
-      <Stack.Screen options={{ title: 'Book expert' }} />
+    <View className="flex-1 bg-surface">
+      <Stack.Screen options={{ headerShown: false }} />
+      <StatusBar style="light" />
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         className="flex-1"
@@ -214,20 +235,62 @@ export default function BookExpertScreen() {
           contentContainerClassName="pb-32"
           showsVerticalScrollIndicator={false}
         >
-          <View className="flex-row items-center bg-brand p-4">
-            <Avatar
-              fullName={pro.user.fullName}
-              photoUrl={pro.user.profilePhoto ?? undefined}
-              size={48}
-              borderColor="#FFFFFF"
+          {/* Navy hero header — back button + expert summary */}
+          <View className="bg-brand-800">
+            <View
+              style={{
+                position: 'absolute',
+                top: -40,
+                right: -40,
+                width: 180,
+                height: 180,
+                borderRadius: 90,
+                backgroundColor: 'rgba(212,162,76,0.14)',
+              }}
             />
-            <View className="ml-3 flex-1">
-              <Text className="text-sm text-ink-inverse/80">Booking with</Text>
-              <Text className="text-base font-bold text-ink-inverse">{pro.user.fullName}</Text>
-              {pro.professionalTitle ? (
-                <Text className="text-xs text-ink-inverse/80">{pro.professionalTitle}</Text>
-              ) : null}
-            </View>
+            <SafeAreaView edges={['top']}>
+              <View className="flex-row items-center justify-between px-5 pt-2">
+                <Pressable
+                  onPress={() => router.back()}
+                  hitSlop={12}
+                  className="h-10 w-10 items-center justify-center rounded-full"
+                  style={{ backgroundColor: 'rgba(255,255,255,0.18)' }}
+                >
+                  <Ionicons name="arrow-back" size={20} color="#FFFFFF" />
+                </Pressable>
+                <Text
+                  className="text-[11px] font-bold uppercase tracking-[2px]"
+                  style={{ color: 'rgba(255,255,255,0.85)' }}
+                >
+                  Confirm booking
+                </Text>
+                <View style={{ width: 40 }} />
+              </View>
+              <View className="flex-row items-center px-5 pt-4 pb-5">
+                <Avatar
+                  fullName={pro.user.fullName}
+                  photoUrl={pro.user.profilePhoto ?? undefined}
+                  size={56}
+                  borderColor="#FFFFFF"
+                />
+                <View className="ml-3 flex-1">
+                  <Text
+                    className="text-[11px] font-bold uppercase tracking-[1.5px]"
+                    style={{ color: colors.accent[200] }}
+                  >
+                    Booking with
+                  </Text>
+                  <Text className="text-[18px] font-bold text-ink-inverse">
+                    {pro.user.fullName}
+                  </Text>
+                  {pro.professionalTitle ? (
+                    <Text className="text-[12px]" style={{ color: 'rgba(255,255,255,0.80)' }}>
+                      {pro.professionalTitle}
+                    </Text>
+                  ) : null}
+                </View>
+              </View>
+            </SafeAreaView>
           </View>
 
           {offerings.length === 0 ? (
@@ -409,10 +472,20 @@ export default function BookExpertScreen() {
         </ScrollView>
 
         <View
-          className="absolute bottom-0 left-0 right-0 border-t border-border bg-surface px-5 pb-6 pt-3"
-          style={{ elevation: 8 }}
+          className="absolute bottom-0 left-0 right-0 border-t border-border bg-surface px-5 pt-3"
+          style={{
+            paddingBottom: Math.max(insets.bottom, 16),
+            shadowColor: '#000',
+            shadowOpacity: 0.08,
+            shadowRadius: 12,
+            shadowOffset: { width: 0, height: -4 },
+            elevation: 8,
+          }}
         >
-          <Pressable
+          <CoralButton
+            label="Confirm booking"
+            icon="checkmark-circle-outline"
+            loading={createBooking.isPending}
             disabled={!canSubmit}
             onPress={() => {
               if (!canSubmit) {
@@ -424,22 +497,11 @@ export default function BookExpertScreen() {
               }
               void onSubmit();
             }}
-            className={`flex-row items-center justify-center rounded-card py-4 ${
-              canSubmit ? 'bg-brand' : 'bg-brand/40'
-            }`}
-          >
-            {createBooking.isPending ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <>
-                <Ionicons name="checkmark-circle" size={18} color="#fff" />
-                <Text className="ml-2 text-base font-bold text-ink-inverse">Confirm booking</Text>
-              </>
-            )}
-          </Pressable>
+            {...(priceEstimate !== null ? { suffix: `· ${formatRupees(priceEstimate)}` } : {})}
+          />
         </View>
       </KeyboardAvoidingView>
-    </SafeAreaView>
+    </View>
   );
 }
 

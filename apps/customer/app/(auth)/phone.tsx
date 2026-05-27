@@ -1,39 +1,19 @@
 import { useState } from 'react';
-import {
-  View,
-  Text,
-  TextInput,
-  Pressable,
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
-  ImageBackground,
-  Dimensions,
-} from 'react-native';
+import { View, Text, TextInput, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
 import { useSendOtp } from '../../src/api/auth';
 import { toE164 } from '../../src/lib/format';
 import { ApiCallError } from '../../src/api/client';
-import { BrandLockup } from '../../src/components/BrandLockup';
+import { BrandHero, CoralButton, MascotImage, ProgressDots } from '../../src/components/ui';
 import { colors } from '../../src/theme/colors';
 
 /**
- * Hero background — iconic Jaipur architecture at golden hour.
- * Localised to TrustNear's launch city, ties brand to a real place.
- * Swap to other state hero shots when we add more cities later.
- *
- * Why a remote URL: skip bundling 300KB+ photo into the APK during
- * iteration; promote to local asset before production.
+ * D2 phone screen — Sevak greeter in a plum hero, ProgressDots showing
+ * step 1 of 4 (phone → otp → profile → location), country code + digits
+ * input, CoralButton CTA. Trust strip lives below the input.
  */
-const HERO_IMAGE =
-  'https://images.unsplash.com/photo-1599661046289-e31897846e41?w=1200&q=80&auto=format&fit=crop';
-
-const SCREEN_HEIGHT = Dimensions.get('window').height;
-const HERO_HEIGHT = Math.round(SCREEN_HEIGHT * 0.46);
-
 export default function PhoneScreen() {
   const router = useRouter();
   const [digits, setDigits] = useState('');
@@ -60,162 +40,129 @@ export default function PhoneScreen() {
   };
 
   return (
-    <View className="flex-1 bg-surface">
+    <View className="flex-1 bg-surface-muted">
       <StatusBar style="light" />
-
-      {/* Hero — Jaipur sunset photography + stacked overlays + brand lockup.
-          Stacked semi-transparent layers simulate a gradient without
-          requiring the expo-linear-gradient native module (so this
-          works on hot-reload, no rebuild needed). */}
-      <ImageBackground
-        source={{ uri: HERO_IMAGE }}
-        style={{ height: HERO_HEIGHT }}
-        resizeMode="cover"
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={{ flex: 1 }}
+        keyboardVerticalOffset={0}
       >
-        {/* Uniform tint — keeps photo readable across content variations */}
-        <View
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: 'rgba(11,31,58,0.32)',
-          }}
-        />
-        {/* Bottom-weighted dark fade in 4 bands so the wordmark + form edge stay legible */}
-        <View
-          style={{
-            position: 'absolute',
-            left: 0,
-            right: 0,
-            bottom: 0,
-            height: HERO_HEIGHT * 0.6,
-          }}
+        <ScrollView
+          contentContainerStyle={{ flexGrow: 1, paddingBottom: 32 }}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
         >
-          <View style={{ flex: 1, backgroundColor: 'rgba(11,31,58,0.0)' }} />
-          <View style={{ flex: 1, backgroundColor: 'rgba(11,31,58,0.25)' }} />
-          <View style={{ flex: 1, backgroundColor: 'rgba(11,31,58,0.55)' }} />
-          <View style={{ flex: 1, backgroundColor: 'rgba(11,31,58,0.82)' }} />
-        </View>
-        <SafeAreaView edges={['top']} style={{ flex: 1 }}>
+          {/* Plum gradient hero with Sevak greeter centered */}
+          <BrandHero
+            bottomGap={32}
+            rightSlot={
+              <View style={{ paddingHorizontal: 4 }}>
+                <ProgressDots total={4} activeIndex={0} inverse />
+              </View>
+            }
+          >
+            <View style={{ alignItems: 'center', paddingTop: 8 }}>
+              <MascotImage variant="greeter" tone="butter" size={120} />
+              <Text className="mt-4 font-display text-h1 text-ink-inverse">
+                Welcome to TrustNear
+              </Text>
+              <Text
+                className="mt-2 text-body text-center"
+                style={{ color: colors.brand[200], maxWidth: 320 }}
+              >
+                Aapke ghar, premium service. Pehle aapka mobile verify karein.
+              </Text>
+            </View>
+          </BrandHero>
+
+          {/* Form sheet — floats above hero with rounded top */}
           <View
             style={{
-              flex: 1,
-              alignItems: 'center',
-              justifyContent: 'center',
-              paddingBottom: 36,
+              marginTop: -24,
+              backgroundColor: colors.surface.muted,
+              borderTopLeftRadius: 28,
+              borderTopRightRadius: 28,
+              paddingHorizontal: 22,
+              paddingTop: 24,
             }}
           >
-            <BrandLockup tone="light-on-dark" size="lg" />
-          </View>
-        </SafeAreaView>
-      </ImageBackground>
-
-      {/* Form surface — floats above hero with soft top radius */}
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={{ flex: 1, marginTop: -28 }}
-      >
-        <View
-          className="flex-1 bg-surface px-6 pt-8"
-          style={{
-            borderTopLeftRadius: 28,
-            borderTopRightRadius: 28,
-            shadowColor: '#000',
-            shadowOpacity: 0.08,
-            shadowRadius: 24,
-            shadowOffset: { width: 0, height: -4 },
-            elevation: 12,
-          }}
-        >
-          <Text className="text-[28px] font-bold tracking-tight text-ink">Get started</Text>
-          <Text className="mt-2 text-[15px] text-ink-muted">
-            We&apos;ll send a 6-digit code to verify your number.
-          </Text>
-
-          <View className="mt-7">
-            <Text className="mb-2 text-[11px] font-bold uppercase tracking-[2px] text-ink-subtle">
-              Mobile number
+            <Text className="font-display text-h2 text-ink">Enter your mobile number</Text>
+            <Text className="mt-2 text-body text-ink-muted">
+              We&apos;ll send a 6-digit code to verify it&apos;s really you.
             </Text>
-            <View
-              className={`flex-row items-center rounded-card border-2 px-4 py-3.5 ${
-                focused ? 'border-brand bg-surface' : 'border-border bg-surface-muted'
-              }`}
-            >
-              <Text className="text-base font-semibold text-ink">🇮🇳</Text>
-              <Text className="ml-2 mr-3 text-base font-semibold text-ink">+91</Text>
-              <View className="h-6 w-px bg-border" />
-              <TextInput
-                value={digits}
-                onChangeText={(t) => setDigits(t.replace(/\D/g, '').slice(0, 10))}
-                onFocus={() => setFocused(true)}
-                onBlur={() => setFocused(false)}
-                placeholder="98765 43210"
-                placeholderTextColor={colors.ink.subtle}
-                keyboardType="number-pad"
-                maxLength={10}
-                className="ml-3 flex-1 text-base text-ink"
-                autoFocus
+
+            <View className="mt-6">
+              <Text className="mb-2 text-overline uppercase text-ink-subtle">Mobile number</Text>
+              <View
+                className={`flex-row items-center rounded-card border-2 px-4 py-3.5 ${
+                  focused ? 'border-accent bg-surface' : 'border-border bg-surface'
+                }`}
+              >
+                <Text className="text-bodyLg" style={{ fontWeight: '700' }}>
+                  🇮🇳
+                </Text>
+                <Text className="ml-2 mr-3 text-bodyLg font-display text-ink">+91</Text>
+                <View
+                  style={{
+                    height: 22,
+                    width: 1,
+                    backgroundColor: colors.border.strong,
+                  }}
+                />
+                <TextInput
+                  value={digits}
+                  onChangeText={(t) => setDigits(t.replace(/\D/g, '').slice(0, 10))}
+                  onFocus={() => setFocused(true)}
+                  onBlur={() => setFocused(false)}
+                  placeholder="98765 43210"
+                  placeholderTextColor={colors.ink.subtle}
+                  keyboardType="number-pad"
+                  maxLength={10}
+                  className="ml-3 flex-1 text-bodyLg text-ink"
+                  style={{ fontWeight: '600' }}
+                  autoFocus
+                />
+              </View>
+              {error ? (
+                <View className="mt-2 flex-row items-center">
+                  <Ionicons name="alert-circle" size={14} color={colors.danger} />
+                  <Text className="ml-1.5 text-small font-display text-danger">{error}</Text>
+                </View>
+              ) : null}
+            </View>
+
+            <View className="mt-6">
+              <CoralButton
+                label="Send OTP"
+                onPress={onContinue}
+                disabled={!valid}
+                loading={sendOtp.isPending}
               />
             </View>
-            {error ? (
-              <View className="mt-2 flex-row items-center">
-                <Ionicons name="alert-circle" size={14} color={colors.danger} />
-                <Text className="ml-1.5 text-[13px] font-medium text-danger">{error}</Text>
-              </View>
-            ) : null}
-          </View>
 
-          <Pressable
-            disabled={!valid || sendOtp.isPending}
-            onPress={onContinue}
-            style={
-              valid && !sendOtp.isPending
-                ? {
-                    shadowColor: colors.brand.DEFAULT,
-                    shadowOpacity: 0.22,
-                    shadowRadius: 14,
-                    shadowOffset: { width: 0, height: 6 },
-                    elevation: 6,
-                  }
-                : undefined
-            }
-            className={`mt-6 flex-row items-center justify-center rounded-card py-4 ${
-              valid && !sendOtp.isPending ? 'bg-brand' : 'bg-brand/30'
-            }`}
-          >
-            {sendOtp.isPending ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <>
-                <Text className="text-base font-bold text-ink-inverse">Send OTP</Text>
-                <Ionicons
-                  name="arrow-forward"
-                  size={18}
-                  color="#FFFFFF"
-                  style={{ marginLeft: 8 }}
-                />
-              </>
-            )}
-          </Pressable>
+            <Text className="mt-5 text-center text-small text-ink-subtle">
+              By continuing you agree to{' '}
+              <Text style={{ fontWeight: '700', color: colors.ink.muted }}>Terms</Text> and{' '}
+              <Text style={{ fontWeight: '700', color: colors.ink.muted }}>Privacy Policy</Text>.
+            </Text>
 
-          <Text className="mt-5 text-center text-[12px] text-ink-subtle">
-            By continuing you agree to <Text className="font-semibold text-ink-muted">Terms</Text>{' '}
-            and <Text className="font-semibold text-ink-muted">Privacy Policy</Text>.
-          </Text>
-
-          {/* Trust strip pinned bottom */}
-          <View className="mt-auto pb-6">
-            <View className="flex-row items-stretch rounded-card border border-border bg-surface px-2 py-3">
+            {/* Trust strip */}
+            <View
+              className="mt-8 flex-row items-stretch rounded-card border bg-surface px-2 py-4"
+              style={{ borderColor: colors.border.DEFAULT }}
+            >
               <TrustChip icon="shield-checkmark" label="Aadhaar" sub="Verified" />
-              <View className="my-2 w-px bg-border" />
+              <View
+                style={{ width: 1, backgroundColor: colors.border.DEFAULT, marginVertical: 6 }}
+              />
               <TrustChip icon="ribbon" label="Background" sub="Checked" />
-              <View className="my-2 w-px bg-border" />
+              <View
+                style={{ width: 1, backgroundColor: colors.border.DEFAULT, marginVertical: 6 }}
+              />
               <TrustChip icon="time" label="~30 min" sub="Avg arrival" />
             </View>
           </View>
-        </View>
+        </ScrollView>
       </KeyboardAvoidingView>
     </View>
   );
@@ -232,11 +179,20 @@ function TrustChip({
 }) {
   return (
     <View className="flex-1 items-center justify-center">
-      <View className="h-9 w-9 items-center justify-center rounded-full bg-accent/15">
-        <Ionicons name={icon} size={18} color={colors.accent[600]} />
+      <View
+        style={{
+          height: 38,
+          width: 38,
+          borderRadius: 19,
+          alignItems: 'center',
+          justifyContent: 'center',
+          backgroundColor: colors.accent[100],
+        }}
+      >
+        <Ionicons name={icon} size={19} color={colors.accent[700]} />
       </View>
-      <Text className="mt-1.5 text-[12px] font-bold text-ink">{label}</Text>
-      <Text className="text-[10px] font-medium text-ink-subtle">{sub}</Text>
+      <Text className="mt-2 text-small font-display text-ink">{label}</Text>
+      <Text className="text-caption text-ink-subtle">{sub}</Text>
     </View>
   );
 }

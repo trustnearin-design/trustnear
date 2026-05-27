@@ -1,0 +1,155 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * Theme tokens — CSS variables let us swap the entire color system by
+ * toggling .dark on <html>. Tailwind config consumes these via
+ * `rgb(var(--token) / <alpha-value>)` so utility classes like
+ * `bg-surface`, `text-ink`, `border-border` auto-update.
+ *
+ * Each value is "R G B" with no commas — that's the Tailwind v3 modern
+ * RGB syntax which supports opacity via `/ 0.5`.
+ */
+:root {
+  /* Brand (navy) — stays close to original */
+  --brand: 11 31 58;
+  --brand-50: 240 244 250;
+  --brand-100: 216 226 238;
+  --brand-200: 168 185 211;
+  --brand-300: 122 146 182;
+  --brand-400: 74 103 137;
+  --brand-500: 34 66 110;
+  --brand-600: 20 47 84;
+  --brand-700: 14 38 69;
+  --brand-800: 11 31 58;
+  --brand-900: 6 18 42;
+
+  /* Accent (gold) */
+  --accent: 212 162 76;
+  --accent-50: 251 247 238;
+  --accent-100: 242 229 197;
+  --accent-200: 232 209 148;
+  --accent-400: 221 179 105;
+  --accent-500: 212 162 76;
+  --accent-600: 167 122 44;
+  --accent-700: 122 90 31;
+
+  /* Ink */
+  --ink: 17 24 39;
+  --ink-muted: 75 85 99;
+  --ink-subtle: 156 163 175;
+  --ink-inverse: 250 250 247;
+
+  /* Surfaces */
+  --surface: 255 255 255;
+  --surface-muted: 250 250 247;
+  --surface-raised: 255 255 255;
+  --surface-inverse: 11 31 58;
+
+  /* Border + status */
+  --border: 231 229 224;
+  --success: 21 128 61;
+  --warning: 180 83 9;
+  --danger: 185 28 28;
+
+  /* Nav (sidebar) — pinned to dark navy in BOTH themes so the brand
+   * identity stays consistent. Overridden minimally in .dark below. */
+  --nav-bg: 11 31 58;
+  --nav-bg-raised: 14 38 69;
+  --nav-border: 20 47 84;
+  --nav-fg: 250 250 247;
+  --nav-fg-muted: 168 185 211;
+  --nav-fg-subtle: 122 146 182;
+}
+
+:root.dark {
+  /* Brand — slightly desaturated, hover variants step lighter (not darker) */
+  --brand: 71 100 145;
+  --brand-50: 30 41 59;
+  --brand-100: 47 65 95;
+  --brand-200: 63 89 124;
+  --brand-300: 89 117 158;
+  --brand-400: 122 146 182;
+  --brand-500: 153 175 207;
+  --brand-600: 180 197 222;
+  --brand-700: 200 216 236;
+  --brand-800: 230 238 248;
+  --brand-900: 248 250 252;
+
+  /* Accent stays bright — feels premium on dark */
+  --accent: 222 174 92;
+  --accent-50: 64 47 18;
+  --accent-100: 92 70 31;
+  --accent-200: 134 102 49;
+  --accent-400: 199 152 70;
+  --accent-500: 222 174 92;
+  --accent-600: 232 195 134;
+  --accent-700: 244 220 175;
+
+  /* Ink inverted */
+  --ink: 240 244 250;
+  --ink-muted: 169 178 196;
+  --ink-subtle: 107 121 145;
+  --ink-inverse: 11 20 36;
+
+  /* Surfaces — deep navy ≠ pure black so brand reads */
+  --surface: 14 25 46;
+  --surface-muted: 11 20 36;
+  --surface-raised: 18 32 56;
+  --surface-inverse: 240 244 250;
+
+  /* Borders + status — softened for the darker substrate */
+  --border: 34 51 79;
+  --success: 74 222 128;
+  --warning: 251 191 36;
+  --danger: 248 113 113;
+
+  /* Nav — even darker in dark mode so the sidebar reads as a layer
+   * beneath cards rather than competing with them */
+  --nav-bg: 7 17 33;
+  --nav-bg-raised: 11 25 46;
+  --nav-border: 22 38 67;
+  --nav-fg: 240 244 250;
+  --nav-fg-muted: 153 175 207;
+  --nav-fg-subtle: 107 121 145;
+}
+
+@layer base {
+  html,
+  body {
+    @apply bg-surface-muted text-ink;
+    font-family: var(--font-inter, system-ui, sans-serif);
+    -webkit-font-smoothing: antialiased;
+  }
+  /* Smooth theme switch — avoids flash on toggle but keeps interactions snappy */
+  html {
+    transition: background-color 200ms ease;
+  }
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-pill bg-brand px-5 py-3 text-sm font-semibold text-ink-inverse transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50;
+  }
+  .btn-accent {
+    @apply inline-flex items-center justify-center gap-2 rounded-pill bg-accent px-5 py-3 text-sm font-semibold text-brand-900 transition hover:bg-accent-600 hover:text-ink-inverse disabled:cursor-not-allowed disabled:opacity-50;
+  }
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 rounded-pill px-4 py-2 text-sm font-medium text-ink-muted transition hover:bg-surface-muted hover:text-ink;
+  }
+  .card {
+    @apply rounded-card border border-border bg-surface shadow-[0_1px_2px_rgba(11,31,58,0.04),0_4px_12px_rgba(11,31,58,0.03)];
+  }
+  .input {
+    @apply w-full rounded-card border border-border bg-surface px-4 py-3 text-body text-ink placeholder:text-ink-subtle focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200;
+  }
+  .pill {
+    @apply inline-flex items-center gap-1 rounded-pill px-2.5 py-0.5 text-caption font-semibold uppercase tracking-wider;
+  }
+}
