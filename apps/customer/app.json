@@ -16,10 +16,10 @@
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "in.sevalink.customer"
+      "bundleIdentifier": "in.trustnear.customer"
     },
     "android": {
-      "package": "in.sevalink.customer",
+      "package": "in.trustnear.customer",
       "edgeToEdgeEnabled": true,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
