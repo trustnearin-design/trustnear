@@ -1,26 +1,40 @@
 # ─────────────────────────────────────────────────────────────────────
-# Build → push → deploy the SEVALINK API.
+# Build → push → deploy the SEVALINK / TrustNear API to Amazon ECS.
+#
+# We build the Hono API image, push it to ECR, then force a new ECS
+# deployment so the service re-pulls the freshly-pushed `:latest` image.
 #
 # Triggers:
-#   - push to `main` (auto-deploy production)
+#   - push to `main` (auto-deploy)
 #   - manual workflow_dispatch (for staging / hotfix re-deploy)
 #
 # Required GitHub repo secrets:
-#   AWS_ACCOUNT_ID          12-digit AWS account ID for SEVALINK
 #   AWS_REGION              ap-south-1 (Mumbai)
-#   AWS_DEPLOY_ROLE_ARN     IAM role ARN with ECR push + App Runner update
-#                           (created via OIDC trust to this repo)
-#   APP_RUNNER_SERVICE_ARN  ARN of the App Runner service to update
+#   AWS_DEPLOY_ROLE_ARN     IAM role ARN assumed via OIDC, with:
+#                             - ECR push (ecr:* on the repo)
+#                             - ecs:UpdateService + ecs:DescribeServices
+#                               on the service below
+#   ECS_CLUSTER             ECS cluster name (or ARN) hosting the API
+#   ECS_SERVICE             ECS service name (or ARN) for the API
 #
-# IAM role setup (one-time, done via console or Terraform):
+# IMPORTANT — image tag assumption:
+#   This uses `aws ecs update-service --force-new-deployment`, which only
+#   re-pulls a NEW image if the service's task definition references a
+#   MUTABLE tag (i.e. `:latest`). The build step below pushes both
+#   `:<sha>` and `:latest`, so make sure the ECS task definition's
+#   container image is `…/trustnear-api:latest`. If it pins a specific
+#   revision/SHA instead, switch to the task-definition-revision flow
+#   (register-task-definition with the :<sha> image, then update-service
+#   --task-definition) — see the commented block at the bottom.
+#
+# IAM / OIDC setup (one-time, console or Terraform):
 #   1. Create OIDC provider for token.actions.githubusercontent.com
-#   2. Create role `github-actions-deploy` with trust policy allowing
-#      this repo's main branch
-#   3. Attach inline policy with ecr:* + apprunner:StartDeployment +
-#      apprunner:DescribeService on the API service ARN
+#   2. Create role `github-actions-deploy` trusting this repo's main branch
+#   3. Attach inline policy: ecr:* (repo) + ecs:UpdateService +
+#      ecs:DescribeServices (service ARN)
 # ─────────────────────────────────────────────────────────────────────
 
-name: Deploy API → AWS App Runner
+name: Deploy API → Amazon ECS
 
 on:
   push:
@@ -88,32 +102,42 @@ jobs:
           cache-to: type=gha,mode=max
           platforms: linux/amd64
 
-      - name: Trigger App Runner deployment
+      - name: Trigger ECS deployment (force new deployment)
         run: |
-          aws apprunner start-deployment \
-            --service-arn "${{ secrets.APP_RUNNER_SERVICE_ARN }}" \
-            --region "${{ secrets.AWS_REGION }}"
+          DEPLOY_ID=$(aws ecs update-service \
+            --cluster "${{ secrets.ECS_CLUSTER }}" \
+            --service "${{ secrets.ECS_SERVICE }}" \
+            --force-new-deployment \
+            --region "${{ secrets.AWS_REGION }}" \
+            --query 'service.deployments[0].id' --output text)
+          echo "Started ECS deployment: $DEPLOY_ID"
 
-      - name: Wait for deployment to stabilize
+      - name: Wait for service to stabilize
         run: |
-          echo "Polling App Runner service status for up to 10 minutes..."
-          for i in $(seq 1 60); do
-            STATUS=$(aws apprunner describe-service \
-              --service-arn "${{ secrets.APP_RUNNER_SERVICE_ARN }}" \
-              --region "${{ secrets.AWS_REGION }}" \
-              --query 'Service.Status' --output text)
-            echo "[$i] App Runner status: $STATUS"
-            case "$STATUS" in
-              RUNNING)
-                echo "✅ Deployment succeeded"
-                exit 0
-                ;;
-              CREATE_FAILED|DELETE_FAILED|PAUSED)
-                echo "❌ Deployment failed with status: $STATUS"
-                exit 1
-                ;;
-            esac
-            sleep 10
-          done
-          echo "⚠️  Timed out waiting for App Runner to stabilize"
-          exit 1
+          echo "Waiting for ECS service to reach a steady state (up to ~10 min)..."
+          aws ecs wait services-stable \
+            --cluster "${{ secrets.ECS_CLUSTER }}" \
+            --service "${{ secrets.ECS_SERVICE }}" \
+            --region "${{ secrets.AWS_REGION }}"
+          echo "✅ ECS service is stable — deployment succeeded"
+
+# ─────────────────────────────────────────────────────────────────────
+# ALTERNATIVE — task-definition-revision flow (use if the task def pins a
+# specific image tag instead of :latest). Replace the two steps above with:
+#
+#   - name: Render new task definition with the freshly built image
+#     id: taskdef
+#     uses: aws-actions/amazon-ecs-render-task-definition@v1
+#     with:
+#       task-definition: apps/api/ecs-task-def.json   # checked-in base
+#       container-name: trustnear-api
+#       image: ${{ steps.ecr-login.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}
+#
+#   - name: Deploy to Amazon ECS
+#     uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+#     with:
+#       task-definition: ${{ steps.taskdef.outputs.task-definition }}
+#       cluster: ${{ secrets.ECS_CLUSTER }}
+#       service: ${{ secrets.ECS_SERVICE }}
+#       wait-for-service-stability: true
+# ─────────────────────────────────────────────────────────────────────
