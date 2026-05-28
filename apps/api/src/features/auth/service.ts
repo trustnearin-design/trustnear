@@ -32,11 +32,40 @@ export async function findOrCreateUser(args: {
   fullName?: string;
   referredByCode?: string;
 }): Promise<User> {
-  const existing = await prisma.user.findUnique({ where: { phone: args.phone } });
+  const existing = await prisma.user.findUnique({
+    where: { phone: args.phone },
+    include: { professional: { select: { id: true } } },
+  });
   if (existing) {
     if (!existing.isActive) {
       throw new AuthError(ErrorCode.SL_109_ACCOUNT_DISABLED, 'Account disabled');
     }
+
+    // Block role-downgrade and admin-impersonation: customer can become
+    // professional (people sign up as customer first then later as pro), but
+    // a pro can't downgrade to customer here, and no one can become admin
+    // via OTP login.
+    if (args.role === 'admin' && existing.role !== 'admin') {
+      throw new AuthError(ErrorCode.SL_107_USER_NOT_FOUND, 'No admin account for this number.');
+    }
+    if (existing.role === 'professional' && args.role === 'customer') {
+      throw new AuthError(
+        ErrorCode.SL_108_FORBIDDEN,
+        'This number is already registered as a professional. Open the Pro app.',
+      );
+    }
+
+    // Customer logging in via Pro app for the first time → promote to
+    // professional + auto-create Professional row so the wizard can start.
+    if (existing.role === 'customer' && args.role === 'professional') {
+      return prisma.user.update({
+        where: { id: existing.id },
+        data: existing.professional
+          ? { role: 'professional' }
+          : { role: 'professional', professional: { create: {} } },
+      });
+    }
+
     return existing;
   }
 

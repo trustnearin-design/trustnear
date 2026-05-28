@@ -28,27 +28,32 @@ const auth = new Hono();
 auth.post('/send-otp', validator('json', SendOtpInputSchema), async (c) => {
   const { phone } = c.req.valid('json');
 
-  const limit = await rateLimit({
-    key: `otp:send:${phone}`,
-    limit: 3,
-    windowSeconds: 3600,
-  });
-  c.header('X-RateLimit-Limit', String(limit.limit));
-  c.header('X-RateLimit-Remaining', String(limit.remaining));
-  c.header('X-RateLimit-Reset', String(limit.resetAt));
+  // TEST-whitelisted phones bypass the rate limit entirely — no SMS is
+  // dispatched for them (the tester knows TEST_OTP_CODE out-of-band) so
+  // there's no abuse vector to prevent. Real-SMS phones keep the 3/hour
+  // limit to protect the SMS bill + the user from spam.
+  const testPhone = isTestOtpPhone(phone);
+  if (!testPhone) {
+    const limit = await rateLimit({
+      key: `otp:send:${phone}`,
+      limit: 3,
+      windowSeconds: 3600,
+    });
+    c.header('X-RateLimit-Limit', String(limit.limit));
+    c.header('X-RateLimit-Remaining', String(limit.remaining));
+    c.header('X-RateLimit-Reset', String(limit.resetAt));
 
-  if (!limit.allowed) {
-    throw new RateLimitError('Too many OTP requests. Try again later.', { resetAt: limit.resetAt });
+    if (!limit.allowed) {
+      throw new RateLimitError('Too many OTP requests. Try again later.', {
+        resetAt: limit.resetAt,
+      });
+    }
   }
 
   const { otp, expiresInSeconds } = await createOtp(phone);
 
-  // For TEST-whitelisted phones we DON'T dispatch via the SMS provider —
-  // tester already knows TEST_OTP_CODE out-of-band, AND some providers
-  // (2Factor with voice fallback) silently replace our OTP with their
-  // own, causing a verify desync. Skip the provider call entirely.
-  if (isTestOtpPhone(phone)) {
-    logger.warn({ phone }, 'otp: TEST phone — skipping SMS provider, tester knows fixed code');
+  if (testPhone) {
+    logger.warn({ phone }, 'otp: TEST phone — skipping rate limit AND SMS provider');
   } else {
     await smsProvider.sendOtp({ phone, otp });
     logger.info({ phone, provider: smsProvider.name }, 'otp sent');
