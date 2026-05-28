@@ -46,10 +46,10 @@ interface PushArgs {
   /** Android notification channel — defaults to 'sevalink-booking'. The
    * 'sevalink-alert' channel is MAX importance with bypassDnd for the
    * Zomato-style ringing on Pro new-match alerts. */
-  channelId?: string;
+  channelId?: string | undefined;
   /** iOS notification category — drives the Accept/Decline action buttons
    * on the heads-up. The Pro app registers 'job-alert' with two actions. */
-  categoryIdentifier?: string;
+  categoryIdentifier?: string | undefined;
 }
 
 async function dispatch(args: PushArgs): Promise<void> {
@@ -250,6 +250,72 @@ export async function notifyNewJobMatch(args: {
     },
     channelId: 'sevalink-alert',
     categoryIdentifier: 'job-alert',
+  });
+}
+
+// ─── Onboarding lifecycle (Phase 3g) ───────────────────────────────
+
+/**
+ * Pro approval celebration. Fires when admin clicks "Approve" in the
+ * Pending Approvals queue. Lands the pro on the home tab on tap; the
+ * Pro app's auth guard auto-routes to (app) once approvalStatus flips,
+ * so this push is the user-facing celebration / explicit confirmation.
+ */
+export async function notifyProApproved(args: {
+  proUserId: string;
+  proName: string;
+}): Promise<void> {
+  const copy = await resolveCopy(
+    'pro_approved',
+    { proName: args.proName },
+    {
+      title: '🎉 Aap approved ho gaye!',
+      body: `Namaste ${args.proName}! Aap ab live ho TrustNear pe — jobs accept karna shuru karein.`,
+    },
+  );
+  await dispatch({
+    userId: args.proUserId,
+    type: 'system',
+    ...copy,
+    data: {
+      type: 'pro_approved',
+      deepLink: '/(app)/(tabs)',
+    },
+  });
+}
+
+/**
+ * Pro rejection — sent with the admin's reason + which fields to fix.
+ * Pro app's auth guard sees approvalStatus=rejected and routes to the
+ * onboarding welcome screen which displays a rejection banner reading
+ * the same reason/fields. This push is the wake-up so they know to
+ * open the app and act on it.
+ */
+export async function notifyProRejected(args: {
+  proUserId: string;
+  proName: string;
+  reason: string;
+  fields: string[];
+}): Promise<void> {
+  const fieldsList = args.fields.length > 0 ? args.fields.join(', ') : '';
+  const copy = await resolveCopy(
+    'pro_rejected',
+    { proName: args.proName, reason: args.reason, fields: fieldsList },
+    {
+      title: 'Application needs a few fixes',
+      body: `${args.reason}${fieldsList ? ` (Fix: ${fieldsList})` : ''}`,
+    },
+  );
+  await dispatch({
+    userId: args.proUserId,
+    type: 'system',
+    ...copy,
+    data: {
+      type: 'pro_rejected',
+      reason: args.reason,
+      fields: fieldsList,
+      deepLink: '/(onboarding)/welcome',
+    },
   });
 }
 

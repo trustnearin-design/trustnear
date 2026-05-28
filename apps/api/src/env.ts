@@ -42,7 +42,18 @@ const EnvSchema = z.object({
   // Sentry — optional in dev, recommended in prod
   SENTRY_DSN: optionalUrl,
 
-  // Third-party — optional now, validated when the feature using them ships
+  // SMS provider selection — `mock` for dev/test, `twofactor` for beta+prod
+  // (2Factor.in — Indian OTP service, doesn't need full DLT), `msg91` for
+  // later when DLT is approved. Default `mock` keeps dev safe.
+  SMS_PROVIDER: z.enum(['mock', 'twofactor', 'msg91']).default('mock'),
+
+  // 2Factor.in — Indian OTP-only SMS provider. See apps/api/src/sms/twofactor.ts.
+  // Sender ID is bound to the template at creation time on 2Factor's dashboard,
+  // not passed per-request, so only API key + template name needed here.
+  TWOFACTOR_API_KEY: emptyToUndefined,
+  TWOFACTOR_TEMPLATE_NAME: emptyToUndefined,
+
+  // MSG91 — original plan, blocked on DLT approval. Kept for future swap.
   MSG91_AUTH_KEY: emptyToUndefined,
   MSG91_TEMPLATE_ID: emptyToUndefined,
   MSG91_SENDER_ID: z.string().default('SEVAOTP'),

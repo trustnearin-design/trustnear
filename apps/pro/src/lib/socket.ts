@@ -11,6 +11,10 @@ import { useAuthStore } from '../stores/auth';
 let socket: Socket | null = null;
 
 function resolveSocketUrl(): string {
+  // Same precedence as the HTTP client — env-injected URL wins so the
+  // socket targets staging/prod in EAS builds, laptop LAN in Expo Go dev.
+  const envUrl = process.env['EXPO_PUBLIC_API_URL'];
+  if (envUrl) return envUrl.replace(/\/+$/, '');
   const extra = (Constants.expoConfig?.extra ?? {}) as {
     apiBaseUrl?: string;
     apiBaseUrlDevice?: string;

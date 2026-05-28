@@ -36,7 +36,10 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, '..');
 const OTP_FILE = path.join(REPO_ROOT, 'apps/api/.last-otp.txt');
 
-const API = process.env.SEVALINK_API_URL ?? 'http://localhost:3000';
+// Use 127.0.0.1 (not "localhost") — Node 18+ fetch resolves "localhost" to ::1
+// first; if the API only binds to IPv4 (the dev default), fetch fails with the
+// uninformative "fetch failed" message. Force IPv4 to avoid that whole class.
+const API = process.env.SEVALINK_API_URL ?? 'http://127.0.0.1:3000';
 const CUSTOMER_PHONE = '+918888100001';
 
 const proPhoneRaw = process.argv[2];

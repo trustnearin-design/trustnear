@@ -18,6 +18,20 @@ function usesFixedOtp(phone: string): boolean {
   return env.NODE_ENV !== 'production' && TEST_OTP_PHONES.has(phone);
 }
 
+/**
+ * Exported so the route handler can skip the SMS provider entirely for
+ * whitelisted test phones. This prevents the OTP desync we hit on
+ * 2026-05-28: 2Factor's account-level voice fallback ignored our
+ * provided OTP and substituted its own AUTOGEN code, which would never
+ * match the TEST_OTP hash we stored in Redis.
+ *
+ * For TEST phones the tester already knows TEST_OTP_CODE (e.g. 123456)
+ * out-of-band, so no SMS is needed.
+ */
+export function isTestOtpPhone(phone: string): boolean {
+  return usesFixedOtp(phone);
+}
+
 function otpKey(phone: string): string {
   return `otp:${phone}`;
 }

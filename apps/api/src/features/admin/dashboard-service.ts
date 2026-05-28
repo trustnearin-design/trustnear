@@ -313,9 +313,10 @@ export async function getAlertCounts(): Promise<{
   kycPending: number;
   disputes: number;
   paymentFailed: number;
+  approvalsPending: number;
 }> {
   const since30 = istDaysAgo(29);
-  const [kycPending, disputes, paymentFailed] = await Promise.all([
+  const [kycPending, disputes, paymentFailed, approvalsPending] = await Promise.all([
     prisma.professional.count({
       where: {
         OR: [
@@ -330,8 +331,12 @@ export async function getAlertCounts(): Promise<{
     prisma.booking.count({
       where: { paymentStatus: 'failed', createdAt: { gte: since30 } },
     }),
+    // Phase 3g — pros awaiting onboarding approval
+    prisma.professional.count({
+      where: { approvalStatus: 'submitted_for_review', deletedAt: null },
+    }),
   ]);
-  return { kycPending, disputes, paymentFailed };
+  return { kycPending, disputes, paymentFailed, approvalsPending };
 }
 
 // ─────────────────────────────────────────────────────────────

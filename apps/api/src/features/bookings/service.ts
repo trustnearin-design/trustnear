@@ -92,10 +92,13 @@ export async function createBooking(input: CreateBookingInput): Promise<{
 
   let matchedProId: string | null = null;
   if (input.preferredProId) {
-    // Direct-book a specific pro (skip matching) if they offer the category + online
+    // Direct-book a specific pro (skip matching) if they offer the category + online.
+    // Also enforce approval_status = 'approved' (Phase 3g) — otherwise a
+    // customer with a deep link could book an unverified onboarding pro.
     const pro = await prisma.professional.findFirst({
       where: {
         id: input.preferredProId,
+        approvalStatus: 'approved',
         availabilityStatus: 'online',
         deletedAt: null,
         serviceOfferings: { some: { categoryId: input.categoryId, isActive: true } },

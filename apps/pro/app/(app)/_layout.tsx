@@ -9,7 +9,7 @@ export default function AppStackLayout() {
     <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
       <Stack.Screen name="(tabs)" />
       <Stack.Screen name="job/[id]" />
-      <Stack.Screen name="onboarding/index" />
+      {/* KYC screens remain accessible AFTER approval (e.g. bank update) */}
       <Stack.Screen name="kyc/index" />
       <Stack.Screen name="kyc/aadhaar" />
       <Stack.Screen name="kyc/pan" />

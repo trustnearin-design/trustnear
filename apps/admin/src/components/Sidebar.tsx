@@ -22,6 +22,7 @@ import {
   MessageSquare,
   Wallet,
   Crown,
+  UserCheck,
   type LucideIcon,
 } from 'lucide-react';
 import { clientFetch } from '@/lib/api-client';
@@ -35,11 +36,17 @@ type NavItem = {
   badgeKey?: AlertKey;
 };
 
-type AlertKey = 'kycPending' | 'disputes' | 'paymentFailed';
-type AlertCounts = { kycPending: number; disputes: number; paymentFailed: number };
+type AlertKey = 'kycPending' | 'disputes' | 'paymentFailed' | 'approvalsPending';
+type AlertCounts = {
+  kycPending: number;
+  disputes: number;
+  paymentFailed: number;
+  approvalsPending?: number;
+};
 
 const PRIMARY_NAV: NavItem[] = [
   { href: '/dashboard', label: 'Dashboard', Icon: LayoutDashboard },
+  { href: '/approvals', label: 'Pro Approvals', Icon: UserCheck, badgeKey: 'approvalsPending' },
   { href: '/kyc', label: 'KYC Queue', Icon: ShieldCheck, badgeKey: 'kycPending' },
   { href: '/experts', label: 'Experts', Icon: Star },
   { href: '/bookings', label: 'Bookings', Icon: CalendarClock },
@@ -165,7 +172,7 @@ function NavSection({
       {items.map((item) => {
         const active =
           currentPath === item.href || (item.href !== '/' && currentPath.startsWith(item.href));
-        const badge = item.badgeKey && alerts ? alerts[item.badgeKey] : 0;
+        const badge: number = item.badgeKey && alerts ? (alerts[item.badgeKey] ?? 0) : 0;
         return (
           <li key={item.href}>
             <Link

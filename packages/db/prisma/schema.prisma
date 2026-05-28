@@ -49,6 +49,55 @@ enum ProAvailability {
   busy
 }
 
+/**
+ * Pro onboarding + approval lifecycle (Phase 3g). Drives the wizard
+ * UI on the Pro app and the admin Pending Approvals queue.
+ *   draft                → just signed up, nothing filled
+ *   personal_info_done   → step 1 (name/DOB/gender/languages/address) saved
+ *   services_done        → categories + pricing chosen
+ *   area_done            → working area (lat/lng + radius) saved
+ *   schedule_done        → days + hours saved
+ *   kyc_in_progress      → started but not finished Aadhaar/PAN/Bank
+ *   submitted_for_review → pro pressed Submit; visible in admin queue
+ *   approved             → admin approved → CAN appear in /pros/nearby
+ *   rejected             → admin rejected with reason + fields[] to fix
+ * Only `approved` pros are returned by /pros/nearby and considered by
+ * the matcher — this is the launch trust gate.
+ */
+enum ProfessionalStatus {
+  draft
+  personal_info_done
+  services_done
+  area_done
+  schedule_done
+  kyc_in_progress
+  submitted_for_review
+  approved
+  rejected
+}
+
+enum Gender {
+  male
+  female
+  other
+  prefer_not_to_say
+}
+
+/**
+ * Police verification doc — pro uploads a clearance certificate (PCC) /
+ * police verification report; admin reviews manually. Not gated by Setu.
+ *   not_uploaded   → no doc yet
+ *   pending_review → uploaded, waiting on admin
+ *   approved       → admin marked verified (also sets policeVerified=true)
+ *   rejected       → admin rejected with note; pro can re-upload
+ */
+enum PoliceDocStatus {
+  not_uploaded
+  pending_review
+  approved
+  rejected
+}
+
 enum TrustBadge {
   none
   bronze
@@ -281,6 +330,23 @@ model Professional {
   isSubscriptionActive     Boolean           @default(false) @map("is_subscription_active")
   subscriptionPlan         SubscriptionPlan  @default(free) @map("subscription_plan")
   subscriptionExpiresAt    DateTime?         @map("subscription_expires_at") @db.Timestamptz()
+  // Onboarding + approval lifecycle (Phase 3g)
+  // approvalStatus drives the wizard guard on the Pro app and the
+  // /pros/nearby visibility filter on the customer side.
+  approvalStatus           ProfessionalStatus @default(draft) @map("approval_status")
+  gender                   Gender?
+  dob                      DateTime?         @db.Date // self-reported; cross-checked vs aadhaarDob at KYC
+  languagesSpoken          String[]          @default([]) @map("languages_spoken")
+  currentAddress           String?           @map("current_address") // full residence address line
+  serviceRadiusKm          Int               @default(5) @map("service_radius_km") @db.SmallInt
+  policeDocUrl             String?           @map("police_doc_url")
+  policeDocStatus          PoliceDocStatus   @default(not_uploaded) @map("police_doc_status")
+  policeDocRejectionNote   String?           @map("police_doc_rejection_note")
+  submittedForReviewAt     DateTime?         @map("submitted_for_review_at") @db.Timestamptz()
+  approvedAt               DateTime?         @map("approved_at") @db.Timestamptz()
+  approvedByUserId         String?           @map("approved_by_user_id") @db.Uuid
+  rejectionReason          String?           @map("rejection_reason")
+  rejectionFields          String[]          @default([]) @map("rejection_fields") // e.g. ["bank","services"]
   createdAt                DateTime          @default(now()) @map("created_at") @db.Timestamptz()
   updatedAt                DateTime          @updatedAt @map("updated_at") @db.Timestamptz()
   deletedAt                DateTime?         @map("deleted_at") @db.Timestamptz()
@@ -296,6 +362,9 @@ model Professional {
   @@index([trustScore(sort: Desc)])
   @@index([availabilityStatus])
   @@index([trustBadge])
+  // Hot filter for /pros/nearby (approved-only) + admin "Pending Approvals" queue
+  @@index([approvalStatus])
+  @@index([submittedForReviewAt(sort: Desc)])
   @@map("professionals")
 }
 

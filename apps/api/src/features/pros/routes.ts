@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { prisma } from '@sevalink/db';
-import { ForbiddenError, NotFoundError } from '@sevalink/types';
+import { DomainError, ErrorCode, ForbiddenError, NotFoundError } from '@sevalink/types';
 import { authenticate, authorize, type AuthContext } from '../../middleware/authenticate.js';
 import { validator } from '../../shared/validator.js';
 import { success } from '../../shared/responses.js';
@@ -10,8 +10,26 @@ import {
   NearbyQuerySchema,
   ProIdParamSchema,
 } from './schemas.js';
+import {
+  AreaInputSchema,
+  PersonalInfoSchema,
+  PhotoConfirmSchema,
+  ScheduleInputSchema,
+  ServicesInputSchema,
+} from './onboarding-schemas.js';
 import { findNearbyPros, getProDetail, listFeaturedPros } from './service.js';
 import { getMyJobs, getMyProfile, getMyTodaySummary, setMyAvailability } from './me-service.js';
+import {
+  getOnboardingStatus,
+  saveArea,
+  savePersonalInfo,
+  savePhoto,
+  savePoliceDoc,
+  saveSchedule,
+  saveServices,
+  submitForReview,
+} from './onboarding-service.js';
+import { saveUpload } from '../admin/uploads-service.js';
 import { getTrustSnapshot } from '../trust-score/service.js';
 
 const pros = new Hono<AuthContext>();
@@ -58,6 +76,134 @@ pros.get(
     return success(c, { jobs, count: jobs.length, segment: q.segment });
   },
 );
+
+/**
+ * ─── Phase 3g — Onboarding wizard endpoints ──────────────────────────
+ * Server-side state machine for the Pro app's onboarding flow. The
+ * client fetches /me/onboarding/status to know what's done and where to
+ * land the user; each PATCH/POST below saves one step. The submit
+ * endpoint flips approval_status to submitted_for_review and re-validates
+ * every required step so the admin queue can trust the data.
+ */
+
+pros.get('/me/onboarding/status', authenticate, authorize('professional'), async (c) => {
+  const user = c.get('user');
+  const status = await getOnboardingStatus(user.sub);
+  return success(c, status);
+});
+
+pros.patch(
+  '/me/onboarding/personal',
+  authenticate,
+  authorize('professional'),
+  validator('json', PersonalInfoSchema),
+  async (c) => {
+    const user = c.get('user');
+    const data = c.req.valid('json');
+    const result = await savePersonalInfo(user.sub, data);
+    return success(c, result);
+  },
+);
+
+/**
+ * Photo upload — multipart/form-data, field name "file". Reuses the
+ * shared uploads-service (local FS in dev, S3 when env vars set). After
+ * a successful upload the URL is persisted on User.profilePhoto via
+ * savePhoto so subsequent /me responses already include it.
+ */
+pros.post('/me/onboarding/photo', authenticate, authorize('professional'), async (c) => {
+  const user = c.get('user');
+  const formData = await c.req.formData().catch(() => null);
+  const file = formData?.get('file');
+  if (!file || !(file instanceof File)) {
+    throw new DomainError(
+      ErrorCode.SL_900_VALIDATION_ERROR,
+      'Missing file in form data (field "file")',
+    );
+  }
+  const origin = new URL(c.req.url).origin;
+  const upload = await saveUpload({ file, folder: 'pro-photos', publicBaseUrl: origin });
+  const result = await savePhoto(user.sub, upload.url);
+  return success(c, { ...result, backend: upload.backend });
+});
+
+/**
+ * Alt path for clients that uploaded out-of-band (e.g. direct-to-S3 from
+ * the mobile app) and just need to register the URL.
+ */
+pros.put(
+  '/me/onboarding/photo',
+  authenticate,
+  authorize('professional'),
+  validator('json', PhotoConfirmSchema),
+  async (c) => {
+    const user = c.get('user');
+    const { url } = c.req.valid('json');
+    const result = await savePhoto(user.sub, url);
+    return success(c, result);
+  },
+);
+
+pros.patch(
+  '/me/onboarding/services',
+  authenticate,
+  authorize('professional'),
+  validator('json', ServicesInputSchema),
+  async (c) => {
+    const user = c.get('user');
+    const data = c.req.valid('json');
+    const result = await saveServices(user.sub, data);
+    return success(c, result);
+  },
+);
+
+pros.patch(
+  '/me/onboarding/area',
+  authenticate,
+  authorize('professional'),
+  validator('json', AreaInputSchema),
+  async (c) => {
+    const user = c.get('user');
+    const data = c.req.valid('json');
+    const result = await saveArea(user.sub, data);
+    return success(c, result);
+  },
+);
+
+pros.patch(
+  '/me/onboarding/schedule',
+  authenticate,
+  authorize('professional'),
+  validator('json', ScheduleInputSchema),
+  async (c) => {
+    const user = c.get('user');
+    const data = c.req.valid('json');
+    const result = await saveSchedule(user.sub, data);
+    return success(c, result);
+  },
+);
+
+pros.post('/me/onboarding/police-doc', authenticate, authorize('professional'), async (c) => {
+  const user = c.get('user');
+  const formData = await c.req.formData().catch(() => null);
+  const file = formData?.get('file');
+  if (!file || !(file instanceof File)) {
+    throw new DomainError(
+      ErrorCode.SL_900_VALIDATION_ERROR,
+      'Missing file in form data (field "file")',
+    );
+  }
+  const origin = new URL(c.req.url).origin;
+  const upload = await saveUpload({ file, folder: 'pro-police-docs', publicBaseUrl: origin });
+  const result = await savePoliceDoc(user.sub, upload.url);
+  return success(c, result);
+});
+
+pros.post('/me/onboarding/submit', authenticate, authorize('professional'), async (c) => {
+  const user = c.get('user');
+  const result = await submitForReview(user.sub);
+  return success(c, result);
+});
 
 pros.get('/me/trust-score', authenticate, async (c) => {
   const user = c.get('user');

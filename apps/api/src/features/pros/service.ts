@@ -64,7 +64,10 @@ export async function findNearbyPros(args: {
   const radiusMeters = args.radiusKm * 1000;
 
   // Raw query — PostGIS ST_DistanceSphere on lat/lng decimals.
-  // Filters: online + offers category + within radius.
+  // Filters: APPROVED + online + offers category + within radius.
+  // The `approval_status = 'approved'` clause is the trust gate (Phase 3g)
+  // — without it, unverified onboarding pros would leak into customer
+  // search the moment they signed up. DO NOT REMOVE.
   const rows = await prisma.$queryRaw<NearbyRow[]>`
     SELECT
       p.id::text             AS professional_id,
@@ -88,7 +91,8 @@ export async function findNearbyPros(args: {
     JOIN pro_locations pl         ON pl.professional_id = p.id
     JOIN pro_service_offerings o  ON o.professional_id = p.id AND o.is_active = true
     JOIN service_categories c     ON c.id = o.category_id     AND c.is_active = true
-    WHERE p.availability_status = 'online'
+    WHERE p.approval_status = 'approved'
+      AND p.availability_status = 'online'
       AND p.deleted_at IS NULL
       AND c.slug = ${args.categorySlug}
       AND ST_DistanceSphere(
@@ -139,10 +143,12 @@ export async function findNearbyPros(args: {
 
 /**
  * Full pro profile — used by the Pro Profile screen (customer side).
+ * Only approved pros are returned; an unapproved id 404s so we never
+ * leak draft profiles via shareable links.
  */
 export async function getProDetail(professionalId: string) {
   const pro = await prisma.professional.findFirst({
-    where: { id: professionalId, deletedAt: null },
+    where: { id: professionalId, deletedAt: null, approvalStatus: 'approved' },
     select: {
       id: true,
       professionalTitle: true,
@@ -243,6 +249,7 @@ export async function listFeaturedPros(limit = 10): Promise<FeaturedPro[]> {
   const rows = await prisma.professional.findMany({
     where: {
       deletedAt: null,
+      approvalStatus: 'approved', // Phase 3g trust gate — see findNearbyPros comment
       user: {
         isActive: true,
         deletedAt: null,

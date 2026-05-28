@@ -18,6 +18,17 @@ import {
 import { listKycQueue, getKycDetail, setVerification } from './kyc-service.js';
 import { KycQueueQuerySchema, SetVerificationInputSchema } from './schemas.js';
 import {
+  approveProfessional,
+  getApprovalReviewDetail,
+  listPendingApprovals,
+  rejectProfessional,
+} from './approvals-service.js';
+import {
+  ApproveInputSchema,
+  PendingApprovalsQuerySchema,
+  RejectInputSchema,
+} from '../pros/onboarding-schemas.js';
+import {
   listAllCategories,
   getCategory,
   createCategory,
@@ -157,6 +168,73 @@ admin.patch('/kyc/:id/verification', validator('json', SetVerificationInputSchem
     professionalId: c.req.param('id'),
     field,
     value,
+  });
+  return success(c, result);
+});
+
+// ─────────────────────────────────────────────────────────────
+// Pro Onboarding Approvals (Phase 3g)
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * GET /admin/pros/pending
+ * Queue of pros awaiting review. Defaults to submitted_for_review, but
+ * the status filter accepts rejected/approved/all for the audit tabs.
+ */
+admin.get('/pros/pending', validator('query', PendingApprovalsQuerySchema), async (c) => {
+  const q = c.req.valid('query');
+  const result = await listPendingApprovals({
+    status: q.status,
+    limit: q.limit,
+    offset: q.offset,
+  });
+  return success(c, result);
+});
+
+/**
+ * GET /admin/pros/:id/review
+ * Full review payload — personal + services + area + schedule + KYC +
+ * police doc URL. One screen, one fetch. Admin doesn't need to bounce.
+ */
+admin.get('/pros/:id/review', async (c) => {
+  const detail = await getApprovalReviewDetail(c.req.param('id'));
+  return success(c, detail);
+});
+
+/**
+ * POST /admin/pros/:id/approve
+ * Flip approval_status → approved. Pro becomes visible in /pros/nearby
+ * and the matcher considers them. Audit-logged.
+ */
+admin.post('/pros/:id/approve', validator('json', ApproveInputSchema), async (c) => {
+  const adminUser = c.get('user');
+  const { note } = c.req.valid('json');
+  const result = await approveProfessional({
+    professionalId: c.req.param('id'),
+    adminUserId: adminUser.sub,
+    note,
+    ip: c.req.header('x-forwarded-for')?.split(',')[0]?.trim() ?? null,
+    userAgent: c.req.header('user-agent') ?? null,
+  });
+  return success(c, result);
+});
+
+/**
+ * POST /admin/pros/:id/reject
+ * Flip approval_status → rejected with a reason + which fields to fix.
+ * Pro lands on Rejected screen with the fields list highlighted; can
+ * edit + resubmit.
+ */
+admin.post('/pros/:id/reject', validator('json', RejectInputSchema), async (c) => {
+  const adminUser = c.get('user');
+  const { reason, fields } = c.req.valid('json');
+  const result = await rejectProfessional({
+    professionalId: c.req.param('id'),
+    adminUserId: adminUser.sub,
+    reason,
+    fields,
+    ip: c.req.header('x-forwarded-for')?.split(',')[0]?.trim() ?? null,
+    userAgent: c.req.header('user-agent') ?? null,
   });
   return success(c, result);
 });

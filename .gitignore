@@ -77,3 +77,13 @@ android/build/
 
 # Prisma
 **/prisma/migrations/dev/
+
+# Local dev logs
+.metro-log.txt
+.metro-stdout.log
+.metro-stderr.log
+.tunnel-log.txt
+.eas-build.log
+.eas-build2.log
+.last-otp.txt
+

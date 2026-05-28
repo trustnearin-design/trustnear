@@ -25,6 +25,7 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#3D1F4E"
       },
+      "googleServicesFile": "./google-services.json",
       "permissions": [
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.ACCESS_FINE_LOCATION",
@@ -48,6 +49,13 @@
         {
           "locationAlwaysAndWhenInUsePermission": "TrustNear Pro needs your location to share live ETA with customers while you're on a job.",
           "isAndroidBackgroundLocationEnabled": true
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "TrustNear Pro needs gallery access to upload your profile photo and verification documents.",
+          "cameraPermission": "TrustNear Pro needs camera access to capture your selfie for KYC verification."
         }
       ]
     ],

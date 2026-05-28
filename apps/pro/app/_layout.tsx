@@ -21,6 +21,7 @@ import { bootstrapAuth, useAuthStore } from '../src/stores/auth';
 import { registerPushTokenWithBackend } from '../src/lib/notifications';
 import { IncomingJobOverlay } from '../src/components/IncomingJobOverlay';
 import { apiFetch } from '../src/api/client';
+import { useOnboardingStatus } from '../src/api/onboarding';
 
 const noop = () => undefined;
 SplashScreen.preventAutoHideAsync().catch(noop);
@@ -36,23 +37,60 @@ const queryClient = new QueryClient({
  * restores a deep URL on cold start that doesn't match the current auth
  * state. Identical strategy to the customer app.
  */
+const ONBOARDING_GROUP = '(onboarding)';
+const PENDING_GROUP = '(pending)';
+const APP_GROUP = '(app)';
+const AUTH_GROUP = '(auth)';
+
+/**
+ * Auth + approval-aware redirect (Phase 3g). On every segment change,
+ * routes the user into the correct group based on their state:
+ *   not authed                    -> (auth)
+ *   authed + draft/rejected       -> (onboarding)   wizard
+ *   authed + submitted_for_review -> (pending)      locked "under review"
+ *   authed + approved             -> (app)          full tabs
+ *
+ * Status comes from /pros/me/onboarding/status, cached by
+ * useOnboardingStatus. While that's loading on cold start we hold the
+ * current screen rather than bouncing -- flicker-free.
+ */
 function useAuthRouteGuard(ready: boolean) {
   const isAuthed = useAuthStore((s) => s.isAuthed);
   const segments = useSegments();
   const router = useRouter();
+  const onboarding = useOnboardingStatus();
 
   useEffect(() => {
     if (!ready) return;
     const group = segments[0];
-    const inAuthGroup = group === '(auth)';
-    const inAppGroup = group === '(app)';
 
-    if (isAuthed && (inAuthGroup || (!inAppGroup && !inAuthGroup))) {
-      router.replace('/(app)');
-    } else if (!isAuthed && (inAppGroup || (!inAuthGroup && !inAppGroup))) {
-      router.replace('/(auth)/welcome');
+    if (!isAuthed) {
+      if (group !== AUTH_GROUP) router.replace('/(auth)/welcome');
+      return;
     }
-  }, [ready, isAuthed, segments, router]);
+
+    // Wait for status to load on cold start so we don't flash tabs
+    // before the wizard kicks in for a draft pro.
+    if (onboarding.isLoading && !onboarding.data) return;
+
+    const status = onboarding.data?.approvalStatus ?? 'draft';
+    const target =
+      status === 'approved'
+        ? APP_GROUP
+        : status === 'submitted_for_review'
+          ? PENDING_GROUP
+          : ONBOARDING_GROUP; // draft + rejected + all intermediate states
+
+    if (group !== target) {
+      const path =
+        target === APP_GROUP
+          ? '/(app)'
+          : target === PENDING_GROUP
+            ? '/(pending)'
+            : '/(onboarding)/welcome';
+      router.replace(path);
+    }
+  }, [ready, isAuthed, segments, router, onboarding.isLoading, onboarding.data]);
 }
 
 /**
@@ -75,6 +113,21 @@ function usePushNotifications(ready: boolean): void {
       const data = response.notification.request.content.data as
         | { bookingId?: string; deepLink?: string; type?: string }
         | undefined;
+
+      // Phase 3g — approval / rejection pushes: no bookingId, just route.
+      // The auth route guard will pull the fresh status from /onboarding/status
+      // on next mount, so we just navigate to the right group and let it
+      // sort out the exact screen. We DON'T need to invalidate cache here;
+      // the guard's useOnboardingStatus refetches on focus.
+      if (data?.type === 'pro_approved') {
+        router.replace('/(app)' as never);
+        return;
+      }
+      if (data?.type === 'pro_rejected') {
+        router.replace('/(onboarding)/welcome' as never);
+        return;
+      }
+
       const bookingId = data?.bookingId;
       if (!bookingId) return;
 
@@ -115,7 +168,9 @@ export default function RootLayout() {
     PlusJakartaSans_700Bold,
     PlusJakartaSans_800ExtraBold,
   });
-  useAuthRouteGuard(ready && fontsLoaded);
+  // NOTE: useAuthRouteGuard moved INSIDE the QueryClientProvider tree (see
+  // <NavigationGuards />) — it now uses useOnboardingStatus (a TanStack
+  // query) which needs the QueryClient context to mount.
   usePushNotifications(ready && fontsLoaded);
 
   useEffect(() => {
@@ -144,9 +199,12 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <QueryClientProvider client={queryClient}>
+          <NavigationGuards ready={ready && fontsLoaded} />
           <StatusBar style="dark" />
           <Stack screenOptions={{ headerShown: false }}>
             <Stack.Screen name="(auth)" />
+            <Stack.Screen name="(onboarding)" />
+            <Stack.Screen name="(pending)" />
             <Stack.Screen name="(app)" />
           </Stack>
           <AuthedJobAlerts />
@@ -165,4 +223,13 @@ function AuthedJobAlerts() {
   const isAuthed = useAuthStore((s) => s.isAuthed);
   if (!isAuthed) return null;
   return <IncomingJobOverlay />;
+}
+
+/**
+ * Mounted INSIDE QueryClientProvider so the auth/onboarding guard can use
+ * TanStack hooks. Returns null — it's a pure side-effect component.
+ */
+function NavigationGuards({ ready }: { ready: boolean }) {
+  useAuthRouteGuard(ready);
+  return null;
 }

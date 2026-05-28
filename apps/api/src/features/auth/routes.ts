@@ -11,7 +11,7 @@ import {
   RefreshTokenInputSchema,
   LogoutInputSchema,
 } from './schemas.js';
-import { createOtp, verifyOtp } from './otp.js';
+import { createOtp, isTestOtpPhone, verifyOtp } from './otp.js';
 import {
   findOrCreateUser,
   issueTokenPair,
@@ -42,9 +42,18 @@ auth.post('/send-otp', validator('json', SendOtpInputSchema), async (c) => {
   }
 
   const { otp, expiresInSeconds } = await createOtp(phone);
-  await smsProvider.sendOtp({ phone, otp });
 
-  logger.info({ phone, provider: smsProvider.name }, 'otp sent');
+  // For TEST-whitelisted phones we DON'T dispatch via the SMS provider —
+  // tester already knows TEST_OTP_CODE out-of-band, AND some providers
+  // (2Factor with voice fallback) silently replace our OTP with their
+  // own, causing a verify desync. Skip the provider call entirely.
+  if (isTestOtpPhone(phone)) {
+    logger.warn({ phone }, 'otp: TEST phone — skipping SMS provider, tester knows fixed code');
+  } else {
+    await smsProvider.sendOtp({ phone, otp });
+    logger.info({ phone, provider: smsProvider.name }, 'otp sent');
+  }
+
   return success(c, { phone, expiresInSeconds });
 });
 
