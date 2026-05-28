@@ -1,6 +1,7 @@
 import { env } from '../env.js';
 import { logger } from '../logger.js';
 import { MockSmsProvider } from './mock.js';
+import { SmartPingSmsProvider } from './smartping.js';
 import { TwoFactorSmsProvider } from './twofactor.js';
 import type { SmsProvider } from './provider.js';
 
@@ -16,6 +17,31 @@ import type { SmsProvider } from './provider.js';
  */
 function selectProvider(): SmsProvider {
   switch (env.SMS_PROVIDER) {
+    case 'smartping': {
+      const missing: string[] = [];
+      if (!env.SMARTPING_USERNAME) missing.push('SMARTPING_USERNAME');
+      if (!env.SMARTPING_PASSWORD) missing.push('SMARTPING_PASSWORD');
+      if (!env.SMARTPING_SENDER) missing.push('SMARTPING_SENDER');
+      if (!env.SMARTPING_DLT_CONTENT_ID) missing.push('SMARTPING_DLT_CONTENT_ID');
+      if (!env.SMARTPING_DLT_PRINCIPAL_ENTITY_ID) missing.push('SMARTPING_DLT_PRINCIPAL_ENTITY_ID');
+      if (!env.SMARTPING_TEMPLATE) missing.push('SMARTPING_TEMPLATE');
+      if (missing.length > 0) {
+        throw new Error(`SMS_PROVIDER=smartping missing env: ${missing.join(', ')}`);
+      }
+      logger.info(
+        { provider: 'smartping', sender: env.SMARTPING_SENDER },
+        'sms: using SmartPing.ai provider',
+      );
+      return new SmartPingSmsProvider({
+        username: env.SMARTPING_USERNAME!,
+        password: env.SMARTPING_PASSWORD!,
+        sender: env.SMARTPING_SENDER!,
+        dltContentId: env.SMARTPING_DLT_CONTENT_ID!,
+        dltPrincipalEntityId: env.SMARTPING_DLT_PRINCIPAL_ENTITY_ID!,
+        template: env.SMARTPING_TEMPLATE!,
+      });
+    }
+
     case 'twofactor': {
       if (!env.TWOFACTOR_API_KEY) {
         throw new Error('SMS_PROVIDER=twofactor but TWOFACTOR_API_KEY is unset');

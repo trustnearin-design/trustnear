@@ -42,12 +42,25 @@ const EnvSchema = z.object({
   // Sentry — optional in dev, recommended in prod
   SENTRY_DSN: optionalUrl,
 
-  // SMS provider selection — `mock` for dev/test, `twofactor` for beta+prod
-  // (2Factor.in — Indian OTP service, doesn't need full DLT), `msg91` for
-  // later when DLT is approved. Default `mock` keeps dev safe.
-  SMS_PROVIDER: z.enum(['mock', 'twofactor', 'msg91']).default('mock'),
+  // SMS provider selection.
+  //   mock      → console logs only (dev safety; default)
+  //   smartping → SmartPing.ai TRAI-DLT (Sankalp Builders account — current prod)
+  //   twofactor → 2Factor.in (Indian OTP service, easier setup but unbranded)
+  //   msg91     → MSG91 (post-DLT, not yet wired)
+  SMS_PROVIDER: z.enum(['mock', 'smartping', 'twofactor', 'msg91']).default('mock'),
 
-  // 2Factor.in — Indian OTP-only SMS provider. See apps/api/src/sms/twofactor.ts.
+  // SmartPing.ai — primary SMS provider for Sankalp/TrustNear launch.
+  // All fields required when SMS_PROVIDER=smartping.
+  // SMARTPING_TEMPLATE MUST be the exact DLT-registered template text with
+  // {OTP} where the OTP variable goes (TRAI scrubber checks exact match).
+  SMARTPING_USERNAME: emptyToUndefined,
+  SMARTPING_PASSWORD: emptyToUndefined,
+  SMARTPING_SENDER: emptyToUndefined,
+  SMARTPING_DLT_CONTENT_ID: emptyToUndefined,
+  SMARTPING_DLT_PRINCIPAL_ENTITY_ID: emptyToUndefined,
+  SMARTPING_TEMPLATE: emptyToUndefined,
+
+  // 2Factor.in — Indian OTP-only SMS provider. Kept as a fallback option.
   // Sender ID is bound to the template at creation time on 2Factor's dashboard,
   // not passed per-request, so only API key + template name needed here.
   TWOFACTOR_API_KEY: emptyToUndefined,
