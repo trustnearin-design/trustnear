@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { View, Text, Image } from 'react-native';
 import { avatarColor, initials } from '../lib/imagery';
 
@@ -10,17 +11,21 @@ interface Props {
 
 /**
  * Circular avatar. Renders the user's photo if provided, otherwise initials
- * on a deterministic colored background derived from the name.
+ * on a deterministic colored background derived from the name. Falls back
+ * to initials if the photo URL fails to load (e.g. broken/missing on CDN).
  */
 export function Avatar({ fullName, photoUrl, size = 56, borderColor }: Props) {
+  const [imageBroken, setImageBroken] = useState(false);
   const radius = size / 2;
   const fontSize = Math.round(size * 0.38);
   const ring = borderColor ? { borderWidth: 2, borderColor } : {};
+  const showImage = !!photoUrl && !imageBroken;
 
-  if (photoUrl) {
+  if (showImage) {
     return (
       <Image
         source={{ uri: photoUrl }}
+        onError={() => setImageBroken(true)}
         style={{
           width: size,
           height: size,

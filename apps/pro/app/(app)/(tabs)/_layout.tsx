@@ -1,6 +1,7 @@
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Platform } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../../../src/theme/colors';
 
 function tabIcon(
@@ -13,6 +14,10 @@ function tabIcon(
 }
 
 export default function TabsLayout() {
+  const insets = useSafeAreaInsets();
+  // Add the OS gesture/home-indicator inset to the bar so the icons sit
+  // above the Android navigation bar and the iOS home indicator.
+  const bottomInset = insets.bottom;
   return (
     <Tabs
       screenOptions={{
@@ -22,8 +27,9 @@ export default function TabsLayout() {
         tabBarStyle: {
           borderTopColor: colors.border.DEFAULT,
           backgroundColor: colors.surface.DEFAULT,
-          height: Platform.OS === 'ios' ? 84 : 64,
+          height: (Platform.OS === 'ios' ? 60 : 60) + bottomInset,
           paddingTop: 6,
+          paddingBottom: bottomInset,
           shadowColor: '#000',
           shadowOpacity: 0.06,
           shadowRadius: 8,
