@@ -11,6 +11,10 @@ import { useAuthStore } from '../stores/auth';
 let socket: Socket | null = null;
 
 function resolveSocketUrl(): string {
+  const envUrl = process.env['EXPO_PUBLIC_API_URL'];
+  if (envUrl) {
+    return envUrl.replace(/\/+$/, '');
+  }
   const extra = (Constants.expoConfig?.extra ?? {}) as {
     apiBaseUrl?: string;
     apiBaseUrlDevice?: string;
@@ -18,7 +22,7 @@ function resolveSocketUrl(): string {
   const constantsAny = Constants as unknown as { isDevice?: boolean };
   const isDevice = constantsAny.isDevice ?? Platform.OS !== 'web';
   const url = isDevice && extra.apiBaseUrlDevice ? extra.apiBaseUrlDevice : extra.apiBaseUrl;
-  if (!url) throw new Error('Missing apiBaseUrl in app.json extra');
+  if (!url) throw new Error('Missing apiBaseUrl in app.json extra or EXPO_PUBLIC_API_URL');
   return url.replace(/\/+$/, '');
 }
 

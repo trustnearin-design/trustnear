@@ -4,14 +4,20 @@ import type { ApiResponse, ApiError } from '@sevalink/types';
 import { useAuthStore } from '../stores/auth';
 
 /**
- * Pick the right API base URL for the current runtime:
- *   - Android emulator → apiBaseUrl (host alias 10.0.2.2)
- *   - iOS simulator   → apiBaseUrl (localhost works)
- *   - Physical device (Expo Go on phone) → apiBaseUrlDevice (laptop LAN IP)
- *
- * Both are set in app.json `expo.extra`.
+ * Pick the right API base URL for the current runtime, in priority order:
+ *   1. EXPO_PUBLIC_API_URL env var — set at EAS Build time per profile.
+ *      This is how preview/production APKs target staging or prod APIs
+ *      without rebuilding app.json.
+ *   2. app.json extra.apiBaseUrlDevice — physical device on Expo Go
+ *      (typically laptop LAN IP for dev).
+ *   3. app.json extra.apiBaseUrl — Android emulator (10.0.2.2) /
+ *      iOS simulator (localhost).
  */
 function resolveBaseUrl(): string {
+  const envUrl = process.env['EXPO_PUBLIC_API_URL'];
+  if (envUrl) {
+    return envUrl.replace(/\/+$/, '');
+  }
   const extra = (Constants.expoConfig?.extra ?? {}) as {
     apiBaseUrl?: string;
     apiBaseUrlDevice?: string;
@@ -20,7 +26,7 @@ function resolveBaseUrl(): string {
   const isDevice = constantsAny.isDevice ?? Platform.OS !== 'web';
   const url = isDevice && extra.apiBaseUrlDevice ? extra.apiBaseUrlDevice : extra.apiBaseUrl;
   if (!url) {
-    throw new Error('Missing apiBaseUrl in app.json extra');
+    throw new Error('Missing apiBaseUrl in app.json extra or EXPO_PUBLIC_API_URL');
   }
   return url.replace(/\/+$/, '');
 }
