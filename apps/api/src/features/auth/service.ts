@@ -54,6 +54,16 @@ export async function findOrCreateUser(args: {
         'This number is already registered as a professional. Open the Pro app.',
       );
     }
+    // Admin numbers must use the admin console — silently issuing a Pro/
+    // Customer token for an admin breaks the apps (their middleware checks
+    // role, so /pros/* and /me return 403 → infinite loader). Force a
+    // clear-error sign-out instead.
+    if (existing.role === 'admin' && args.role !== 'admin') {
+      throw new AuthError(
+        ErrorCode.SL_108_FORBIDDEN,
+        'This number is registered as an admin. Use the admin console — or sign up with a different phone for the Customer / Pro app.',
+      );
+    }
 
     // Customer logging in via Pro app for the first time → promote to
     // professional + auto-create Professional row so the wizard can start.
