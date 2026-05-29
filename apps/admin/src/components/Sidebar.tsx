@@ -23,6 +23,7 @@ import {
   Wallet,
   Crown,
   UserCheck,
+  Send,
   type LucideIcon,
 } from 'lucide-react';
 import { clientFetch } from '@/lib/api-client';
@@ -71,6 +72,7 @@ const CONTENT_NAV: NavItem[] = [
 
 const SECONDARY_NAV: NavItem[] = [
   { href: '/admins', label: 'Admin team', Icon: Crown },
+  { href: '/sms', label: 'SMS / OTP', Icon: Send },
   { href: '/config', label: 'Config', Icon: Settings },
   { href: '/audit', label: 'Audit log', Icon: ScrollText },
 ];

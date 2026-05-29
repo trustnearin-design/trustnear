@@ -57,6 +57,8 @@ import {
   upsertConfig,
   deleteConfig,
 } from './config-service.js';
+import { getMaskedSmsConfig, saveSmsConfig, sendTestSms } from './sms-config-service.js';
+import { SmsConfigSchema, TestSmsInputSchema } from './sms-config-schemas.js';
 import {
   listUsers,
   getUserDetail,
@@ -354,6 +356,40 @@ admin.put('/config/:key', validator('json', ConfigUpsertSchema), async (c) => {
 
 admin.delete('/config/:key', async (c) => {
   const result = await deleteConfig(c.req.param('key'));
+  return success(c, result);
+});
+
+// ─────────────────────────────────────────────────────────────
+// SMS / OTP provider config — dedicated page for the credentials
+// + template + provider switch + test SMS button.
+// Credentials are masked in GET responses and merged on PUT so admins
+// can edit one field without re-typing the password.
+// ─────────────────────────────────────────────────────────────
+
+admin.get('/sms-config', async (c) => {
+  const config = await getMaskedSmsConfig();
+  return success(c, { config });
+});
+
+admin.put('/sms-config', validator('json', SmsConfigSchema), async (c) => {
+  const incoming = c.req.valid('json');
+  const adminUser = c.get('user');
+  const saved = await saveSmsConfig({
+    incoming,
+    actorId: adminUser.sub,
+    actorRole: 'admin',
+    ip: c.req.header('x-forwarded-for')?.split(',')[0]?.trim() ?? null,
+    userAgent: c.req.header('user-agent') ?? null,
+  });
+  return success(c, { config: saved });
+});
+
+admin.post('/sms-config/test', validator('json', TestSmsInputSchema), async (c) => {
+  const { phone, draftConfig } = c.req.valid('json');
+  const result = await sendTestSms({
+    phone,
+    ...(draftConfig ? { draftConfig } : {}),
+  });
   return success(c, result);
 });
 

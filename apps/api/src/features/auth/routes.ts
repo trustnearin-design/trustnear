@@ -3,7 +3,7 @@ import { validator } from '../../shared/validator.js';
 import { RateLimitError, ErrorCode, AuthError } from '@sevalink/types';
 import { rateLimit } from '../../shared/rate-limit.js';
 import { success } from '../../shared/responses.js';
-import { smsProvider } from '../../sms/index.js';
+import { getSmsProvider } from '../../sms/index.js';
 import { logger } from '../../logger.js';
 import {
   SendOtpInputSchema,
@@ -55,6 +55,7 @@ auth.post('/send-otp', validator('json', SendOtpInputSchema), async (c) => {
   if (testPhone) {
     logger.warn({ phone }, 'otp: TEST phone — skipping rate limit AND SMS provider');
   } else {
+    const smsProvider = await getSmsProvider();
     await smsProvider.sendOtp({ phone, otp });
     logger.info({ phone, provider: smsProvider.name }, 'otp sent');
   }

@@ -202,6 +202,40 @@ export const CONFIG_REGISTRY: ConfigDescriptor[] = [
     defaultValue: 'https://wa.me/911234567890',
     isPublic: true,
   },
+
+  // ─── SMS / OTP provider ────────────────────────────────────────────
+  // Editable end-to-end from /sms admin page. Cached 30s on the API
+  // (invalidateSmsProviderCache() on save makes it instant). Falls back
+  // to env vars when this key is unset, so dev keeps working.
+  {
+    key: 'sms_config',
+    group: 'SMS / OTP',
+    label: 'SMS provider configuration',
+    description:
+      'Active SMS provider + per-provider credentials and DLT template. Saving here takes effect within ~30 sec — no API redeploy.',
+    type: 'json',
+    defaultValue: {
+      provider: 'mock',
+      smartping: {
+        username: '',
+        password: '',
+        sender: '',
+        dltContentId: '',
+        dltPrincipalEntityId: '',
+        template:
+          'Sankalp Your verification code is {OTP}. Do not share this OTP with anyone. Valid for 10 minutes.',
+      },
+      twofactor: {
+        apiKey: '',
+        templateName: '',
+      },
+      msg91: {
+        authKey: '',
+        templateId: '',
+        senderId: '',
+      },
+    },
+  },
 ];
 
 export function findDescriptor(key: string): ConfigDescriptor | undefined {
