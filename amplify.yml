@@ -5,25 +5,31 @@ applications:
       phases:
         preBuild:
           commands:
-            # Amplify CodeBuild's os.tmpdir() resolves OUTSIDE the workspace
-            # to /codebuild/output/srcXXXX/ which is read-only. pnpm's
-            # internal `runDepsStatusCheck` writes a sentinel via that
-            # path and crashes with EACCES. Redirect all temp writes to
-            # /tmp which is always writable in CodeBuild containers.
-            - export TMPDIR=/tmp
             # Amplify Hosting builds run on Amazon Linux 2023 with Node 20+
             # but no pnpm. Install pinned pnpm matching workspace.
             - npm install -g pnpm@11.1.3
             # Install dependencies for the admin app + its transitive workspace
             # deps (db / types / utils / tsconfig). --filter scopes the install
             # so we don't pull customer/pro/api node_modules on every build.
+            # `pnpm install` itself works fine on CodeBuild — it's only OTHER
+            # pnpm CLI commands that trip the EACCES bug (see build phase).
             - cd ../.. && pnpm install --frozen-lockfile --filter "@sevalink/admin..."
         build:
           commands:
-            - export TMPDIR=/tmp
-            # Admin doesn't import @sevalink/db directly — it talks to the
-            # staging API over HTTP — so we skip `prisma generate` here.
-            - cd ../.. && pnpm --filter @sevalink/admin build
+            # Why we DON'T use `pnpm --filter @sevalink/admin build` here:
+            # pnpm 11.x runs an implicit `runDepsStatusCheck` before any
+            # CLI command which spawns a sync subprocess that writes a
+            # temp file to /codebuild/output/srcXXXX/ (read-only sandbox
+            # root). That throws EACCES and kills every build. Setting
+            # verify-deps-before-run=false in .npmrc + TMPDIR=/tmp didn't
+            # help — the subprocess does its own path resolution.
+            #
+            # Fix: invoke the next binary directly. The hoisted layout
+            # (node-linker=hoisted in .npmrc) puts next at
+            # <repo>/node_modules/.bin/next. Workspace package symlinks
+            # like @sevalink/utils still resolve correctly because we
+            # already ran `pnpm install` in preBuild.
+            - cd ../../apps/admin && ../../node_modules/.bin/next build
       artifacts:
         # Amplify Next.js SSR needs the .next dir as the build output
         baseDirectory: .next
@@ -33,5 +39,4 @@ applications:
         paths:
           - node_modules/**/*
           - ../../node_modules/**/*
-          - ../../packages/db/node_modules/**/*
           - .next/cache/**/*
