@@ -14,9 +14,13 @@ applications:
             - cd ../.. && pnpm install --frozen-lockfile --filter "@sevalink/admin..."
         build:
           commands:
-            # Generate Prisma client (needed by @sevalink/db)
-            - cd ../.. && pnpm --filter @sevalink/db exec prisma generate
-            # Build the admin Next.js app
+            # Admin doesn't import @sevalink/db directly — it talks to the
+            # staging API over HTTP — so we skip `prisma generate` here.
+            # If admin ever adds a direct DB call, restore this line:
+            #   - cd packages/db && pnpm exec prisma generate
+            # (note: must be a `cd` into the package, not pnpm --filter exec,
+            # because Amplify's CodeBuild sandbox forbids pnpm's implicit
+            # dep-status temp-file write outside the repo working dir.)
             - cd ../.. && pnpm --filter @sevalink/admin build
       artifacts:
         # Amplify Next.js SSR needs the .next dir as the build output
