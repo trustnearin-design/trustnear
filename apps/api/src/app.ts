@@ -89,16 +89,19 @@ export function createApp(): Hono<{ Variables: { requestId: string } }> {
   app.use('/uploads/*', serveStatic({ root: './' }));
 
   // Rate limits — applied BEFORE routes. Health is intentionally exempt so
-  // App Runner / monitoring don't get throttled. Auth is strictest because
-  // OTP send/verify are the most abusable endpoints (SMS cost + brute force).
+  // App Runner / monitoring don't get throttled. Auth is strict-ish to
+  // protect OTP send/verify (SMS cost + brute force), but generous enough
+  // that a single tester on a shared IP can iterate without tripping it
+  // (one test = ~3 calls: refresh + send + verify). The deeper protection
+  // is the 3/hr per-phone limit on /auth/send-otp itself in routes.ts.
   // Authenticated APIs get a more generous limit; we identify by user when
   // available, falling back to IP for unauthenticated discovery calls.
-  app.use('/api/v1/auth/*', rateLimit({ windowMs: 60_000, max: 20, keyPrefix: 'auth' }));
+  app.use('/api/v1/auth/*', rateLimit({ windowMs: 60_000, max: 60, keyPrefix: 'auth' }));
   app.use(
     '/api/v1/*',
     rateLimit({
       windowMs: 60_000,
-      max: 120,
+      max: 240,
       keyPrefix: 'api',
       getKey: (c) => {
         const userId = c.get('userId' as never) as string | undefined;
