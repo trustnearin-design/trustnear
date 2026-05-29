@@ -24,12 +24,14 @@ applications:
             # verify-deps-before-run=false in .npmrc + TMPDIR=/tmp didn't
             # help — the subprocess does its own path resolution.
             #
-            # Fix: invoke the next binary directly. The hoisted layout
-            # (node-linker=hoisted in .npmrc) puts next at
-            # <repo>/node_modules/.bin/next. Workspace package symlinks
-            # like @sevalink/utils still resolve correctly because we
-            # already ran `pnpm install` in preBuild.
-            - cd ../../apps/admin && ../../node_modules/.bin/next build
+            # Fix: invoke the next binary directly. Amplify monorepo
+            # builds run commands from appRoot (= apps/admin) so the
+            # per-package node_modules is right here. pnpm install
+            # --filter @sevalink/admin... in preBuild populates the
+            # per-package .bin/ as a hoisted-style symlink. Workspace
+            # package imports (@sevalink/utils etc.) resolve via the
+            # symlink trees pnpm laid down.
+            - node_modules/.bin/next build
       artifacts:
         # Amplify Next.js SSR needs the .next dir as the build output
         baseDirectory: .next
