@@ -23,7 +23,13 @@ const config: NextConfig = {
   // needs this lift to survive into the deployed bundle.
   env: {
     API_BASE_URL: process.env['API_BASE_URL'] ?? '',
-    SESSION_COOKIE_NAME: process.env['SESSION_COOKIE_NAME'] ?? '',
+    // `||` (not `??`) so an EMPTY-string Amplify env value still falls
+    // back to the default. Without this, builds where Amplify didn't
+    // set SESSION_COOKIE_NAME bake `""` into the bundle and writeSession
+    // ends up setting a cookie with no name (`set-cookie: =<value>`),
+    // which browsers silently drop — middleware then bounces every
+    // "logged-in" request back to /login.
+    SESSION_COOKIE_NAME: process.env['SESSION_COOKIE_NAME'] || 'trustnear_admin_session',
   },
 };
 
