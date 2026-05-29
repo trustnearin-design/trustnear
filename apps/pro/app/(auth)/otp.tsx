@@ -79,44 +79,46 @@ export default function OtpScreen() {
   return (
     <View className="flex-1 bg-surface-muted">
       <StatusBar style="light" />
-
-      <BrandHero
-        onBack={() => router.back()}
-        bottomGap={28}
-        rightSlot={
-          <View style={{ paddingHorizontal: 4 }}>
-            <ProgressDots total={5} activeIndex={1} inverse />
-          </View>
-        }
-      >
-        <View style={{ alignItems: 'center', paddingTop: 4 }}>
-          <MascotImage variant="verifier" tone="coral" size={120} />
-          <Text className="mt-3 font-display text-h2 text-ink-inverse">Almost there!</Text>
-          <Text className="mt-1.5 text-body text-center" style={{ color: colors.brand[200] }}>
-            6-digit code sent to{' '}
-            <Text style={{ color: '#FFFFFF', fontWeight: '700' }}>
-              {phone ? formatIndianPhone(phone) : ''}
-            </Text>
-          </Text>
-        </View>
-      </BrandHero>
-
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={{ flex: 1, marginTop: -24 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={{ flex: 1 }}
+        keyboardVerticalOffset={0}
       >
-        <View
-          style={{
-            flex: 1,
-            backgroundColor: colors.surface.muted,
-            borderTopLeftRadius: 28,
-            borderTopRightRadius: 28,
-          }}
+        <ScrollView
+          contentContainerStyle={{ flexGrow: 1, paddingBottom: 32 }}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
         >
-          <ScrollView
-            contentContainerStyle={{ paddingHorizontal: 22, paddingTop: 28, paddingBottom: 32 }}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
+          <BrandHero
+            onBack={() => router.back()}
+            bottomGap={28}
+            rightSlot={
+              <View style={{ paddingHorizontal: 4 }}>
+                <ProgressDots total={5} activeIndex={1} inverse />
+              </View>
+            }
+          >
+            <View style={{ alignItems: 'center', paddingTop: 4 }}>
+              <MascotImage variant="verifier" tone="coral" size={120} />
+              <Text className="mt-3 font-display text-h2 text-ink-inverse">Almost there!</Text>
+              <Text className="mt-1.5 text-body text-center" style={{ color: colors.brand[200] }}>
+                6-digit code sent to{' '}
+                <Text style={{ color: '#FFFFFF', fontWeight: '700' }}>
+                  {phone ? formatIndianPhone(phone) : ''}
+                </Text>
+              </Text>
+            </View>
+          </BrandHero>
+
+          <View
+            style={{
+              marginTop: -24,
+              backgroundColor: colors.surface.muted,
+              borderTopLeftRadius: 28,
+              borderTopRightRadius: 28,
+              paddingHorizontal: 22,
+              paddingTop: 28,
+            }}
           >
             <Text className="mb-3 text-overline uppercase text-ink-subtle">Enter OTP</Text>
             <Pressable
@@ -222,8 +224,8 @@ export default function OtpScreen() {
                 {cooldown > 0 ? `Resend OTP in ${cooldown}s` : 'Resend OTP'}
               </Text>
             </Pressable>
-          </ScrollView>
-        </View>
+          </View>
+        </ScrollView>
       </KeyboardAvoidingView>
     </View>
   );

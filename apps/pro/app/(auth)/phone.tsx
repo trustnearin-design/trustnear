@@ -41,45 +41,47 @@ export default function PhoneScreen() {
   return (
     <View className="flex-1 bg-surface-muted">
       <StatusBar style="light" />
-
-      <BrandHero
-        bottomGap={32}
-        rightSlot={
-          <View style={{ paddingHorizontal: 4 }}>
-            <ProgressDots total={5} activeIndex={0} inverse />
-          </View>
-        }
-      >
-        <View style={{ alignItems: 'center', paddingTop: 8 }}>
-          <MascotImage variant="greeter" tone="butter" size={140} />
-          <Text className="mt-4 font-display text-h1 text-ink-inverse">
-            Welcome to TrustNear Pro
-          </Text>
-          <Text
-            className="mt-2 text-body text-center"
-            style={{ color: colors.brand[200], maxWidth: 320 }}
-          >
-            Earn on your terms. Pehle aapka mobile verify karein.
-          </Text>
-        </View>
-      </BrandHero>
-
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={{ flex: 1, marginTop: -24 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={{ flex: 1 }}
+        keyboardVerticalOffset={0}
       >
-        <View
-          style={{
-            flex: 1,
-            backgroundColor: colors.surface.muted,
-            borderTopLeftRadius: 28,
-            borderTopRightRadius: 28,
-          }}
+        <ScrollView
+          contentContainerStyle={{ flexGrow: 1, paddingBottom: 32 }}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
         >
-          <ScrollView
-            contentContainerStyle={{ paddingHorizontal: 22, paddingTop: 28, paddingBottom: 32 }}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
+          <BrandHero
+            bottomGap={32}
+            rightSlot={
+              <View style={{ paddingHorizontal: 4 }}>
+                <ProgressDots total={5} activeIndex={0} inverse />
+              </View>
+            }
+          >
+            <View style={{ alignItems: 'center', paddingTop: 8 }}>
+              <MascotImage variant="greeter" tone="butter" size={140} />
+              <Text className="mt-4 font-display text-h1 text-ink-inverse">
+                Welcome to TrustNear Pro
+              </Text>
+              <Text
+                className="mt-2 text-body text-center"
+                style={{ color: colors.brand[200], maxWidth: 320 }}
+              >
+                Earn on your terms. Pehle aapka mobile verify karein.
+              </Text>
+            </View>
+          </BrandHero>
+
+          <View
+            style={{
+              marginTop: -24,
+              backgroundColor: colors.surface.muted,
+              borderTopLeftRadius: 28,
+              borderTopRightRadius: 28,
+              paddingHorizontal: 22,
+              paddingTop: 28,
+            }}
           >
             <Text className="font-display text-h2 text-ink">Enter your mobile number</Text>
             <Text className="mt-2 text-body text-ink-muted">
@@ -149,8 +151,8 @@ export default function PhoneScreen() {
               />
               <ProChip icon="people-outline" label="Verified" sub="Customers" />
             </View>
-          </ScrollView>
-        </View>
+          </View>
+        </ScrollView>
       </KeyboardAvoidingView>
     </View>
   );
