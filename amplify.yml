@@ -5,29 +5,20 @@ applications:
       phases:
         preBuild:
           commands:
-            # Build #7 diagnostic confirmed CWD at phase start = appRoot
-            # (apps/admin). In Amplify monorepo $CODEBUILD_SRC_DIR also
-            # points to appRoot (NOT the repo root), so the ONLY reliable
-            # way to reach the repo root is the relative `cd ../..`.
-            - 'echo "preBuild CWD: $(pwd)"'
+            # Build #8 diagnostic confirmed: preBuild starts in appRoot
+            # (apps/admin) and build starts in REPO ROOT (different CWDs
+            # per phase — yes, really). So preBuild walks up to repo
+            # root with cd ../.. and build walks DOWN to apps/admin.
             - npm install -g pnpm@11.1.3
-            - 'cd ../.. && echo "repo root: $(pwd)" && pnpm install --frozen-lockfile --filter "@sevalink/admin..."'
+            - cd ../.. && pnpm install --frozen-lockfile --filter "@sevalink/admin..."
         build:
           commands:
-            # Diagnostic block — log everything so we can see exactly
-            # what Amplify gives us for the build phase.
-            - 'echo "build CWD: $(pwd)"'
-            - 'echo "AMPLIFY_MONOREPO_APP_ROOT=$AMPLIFY_MONOREPO_APP_ROOT"'
-            - 'echo "CODEBUILD_SRC_DIR=$CODEBUILD_SRC_DIR"'
-            - 'echo "ls (CWD):" && ls -la | head -20'
-            # Skip pnpm CLI for the build step (its runDepsStatusCheck
-            # subprocess EACCESes — builds #1-4). Just invoke next from
-            # the per-package node_modules. Since CWD = apps/admin (per
-            # preBuild diagnostic), next-bin is directly here.
-            - 'echo "ls node_modules/.bin (head):" && ls node_modules/.bin 2>/dev/null | head -5 || echo "no .bin"'
-            - node_modules/.bin/next build
+            # Skip pnpm CLI (its runDepsStatusCheck subprocess EACCESes
+            # in CodeBuild — builds #1-4). Just invoke next directly.
+            # CWD here is repo root, so cd into apps/admin first.
+            - cd apps/admin && node_modules/.bin/next build
       artifacts:
-        # Amplify Next.js SSR needs the .next dir as the build output
+        # baseDirectory is relative to appRoot, so apps/admin/.next/
         baseDirectory: .next
         files:
           - '**/*'
