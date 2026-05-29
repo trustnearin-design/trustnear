@@ -5,36 +5,27 @@ applications:
       phases:
         preBuild:
           commands:
-            # Diagnostic — confirm CWD at phase start. Amplify docs say
-            # commands run from appRoot but empirically they run from
-            # somewhere else, so log it for next time.
-            - echo "preBuild CWD:" && pwd
-            # Amplify Hosting builds run on Amazon Linux 2023 with Node 20+
-            # but no pnpm. Install pinned pnpm matching workspace.
+            # Build #7 diagnostic confirmed CWD at phase start = appRoot
+            # (apps/admin). In Amplify monorepo $CODEBUILD_SRC_DIR also
+            # points to appRoot (NOT the repo root), so the ONLY reliable
+            # way to reach the repo root is the relative `cd ../..`.
+            - 'echo "preBuild CWD: $(pwd)"'
             - npm install -g pnpm@11.1.3
-            # Install dependencies for the admin app + its transitive workspace
-            # deps (db / types / utils / tsconfig). --filter scopes the install
-            # so we don't pull customer/pro/api node_modules on every build.
-            # `pnpm install` itself works fine on CodeBuild — it's only OTHER
-            # pnpm CLI commands that trip the EACCES bug (see build phase).
-            # Navigate to the repo root via $CODEBUILD_SRC_DIR (always set
-            # by Amplify's underlying CodeBuild) for robustness.
-            - cd $CODEBUILD_SRC_DIR && pnpm install --frozen-lockfile --filter "@sevalink/admin..."
+            - 'cd ../.. && echo "repo root: $(pwd)" && pnpm install --frozen-lockfile --filter "@sevalink/admin..."'
         build:
           commands:
-            - echo "build CWD:" && pwd
-            # Why we DON'T use `pnpm --filter @sevalink/admin build`:
-            # pnpm 11.x runs an implicit `runDepsStatusCheck` before any
-            # CLI command which spawns a sync subprocess that writes a
-            # temp file to /codebuild/output/srcXXXX/ (read-only sandbox
-            # root) → EACCES → build fails. Builds #1-4 all hit this.
-            #
-            # Fix: invoke next directly from the admin's per-package
-            # node_modules (pnpm install --filter put it there).
-            # Use $CODEBUILD_SRC_DIR for an absolute path so we don't
-            # depend on the (apparently inconsistent) CWD that Amplify's
-            # monorepo support picks for each phase.
-            - cd $CODEBUILD_SRC_DIR/apps/admin && node_modules/.bin/next build
+            # Diagnostic block — log everything so we can see exactly
+            # what Amplify gives us for the build phase.
+            - 'echo "build CWD: $(pwd)"'
+            - 'echo "AMPLIFY_MONOREPO_APP_ROOT=$AMPLIFY_MONOREPO_APP_ROOT"'
+            - 'echo "CODEBUILD_SRC_DIR=$CODEBUILD_SRC_DIR"'
+            - 'echo "ls (CWD):" && ls -la | head -20'
+            # Skip pnpm CLI for the build step (its runDepsStatusCheck
+            # subprocess EACCESes — builds #1-4). Just invoke next from
+            # the per-package node_modules. Since CWD = apps/admin (per
+            # preBuild diagnostic), next-bin is directly here.
+            - 'echo "ls node_modules/.bin (head):" && ls node_modules/.bin 2>/dev/null | head -5 || echo "no .bin"'
+            - node_modules/.bin/next build
       artifacts:
         # Amplify Next.js SSR needs the .next dir as the build output
         baseDirectory: .next
