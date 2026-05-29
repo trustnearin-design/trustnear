@@ -8,9 +8,8 @@ const __dirname = dirname(__filename);
 const config: NextConfig = {
   reactStrictMode: true,
   transpilePackages: ['@sevalink/types', '@sevalink/db', '@sevalink/utils'],
-  experimental: {
-    typedRoutes: true,
-  },
+  // Was experimental.typedRoutes before Next 15.3 — moved to top-level.
+  typedRoutes: true,
   // Pin Next.js workspace root to the monorepo root. Without this Next
   // detects multiple lockfiles (C:\Users\hp\pnpm-lock.yaml +
   // sevalink\pnpm-lock.yaml) and picks the wrong one, which slows the

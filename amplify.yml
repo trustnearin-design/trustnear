@@ -1,0 +1,31 @@
+version: 1
+applications:
+  - appRoot: apps/admin
+    frontend:
+      phases:
+        preBuild:
+          commands:
+            # Amplify Hosting builds run on Amazon Linux 2023 with Node 20+
+            # but no pnpm. Install pinned pnpm matching workspace.
+            - npm install -g pnpm@11.1.3
+            # Install dependencies for the admin app + its transitive workspace
+            # deps (db / types / utils / tsconfig). --filter scopes the install
+            # so we don't pull customer/pro/api node_modules on every build.
+            - cd ../.. && pnpm install --frozen-lockfile --filter "@sevalink/admin..."
+        build:
+          commands:
+            # Generate Prisma client (needed by @sevalink/db)
+            - cd ../.. && pnpm --filter @sevalink/db exec prisma generate
+            # Build the admin Next.js app
+            - cd ../.. && pnpm --filter @sevalink/admin build
+      artifacts:
+        # Amplify Next.js SSR needs the .next dir as the build output
+        baseDirectory: .next
+        files:
+          - '**/*'
+      cache:
+        paths:
+          - node_modules/**/*
+          - ../../node_modules/**/*
+          - ../../packages/db/node_modules/**/*
+          - .next/cache/**/*

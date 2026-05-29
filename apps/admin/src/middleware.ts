@@ -33,5 +33,10 @@ export function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/((?!api|_next/static|_next/image|favicon.ico).*)'],
+  // Exclude all framework routes + public static assets from the auth
+  // guard. `mascot` is the Sevak PNG folder used by login + dashboard;
+  // it's loaded by Next.js Image (server-side fetch) which has no
+  // session cookie, so without this exemption the middleware bounces
+  // those internal fetches to /login and broken images render.
+  matcher: ['/((?!api|_next/static|_next/image|mascot|icon\\.png|favicon\\.ico).*)'],
 };
