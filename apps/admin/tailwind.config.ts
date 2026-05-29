@@ -3,7 +3,8 @@ import type { Config } from 'tailwindcss';
 /**
  * TrustNear admin Tailwind config — color tokens reference CSS variables
  * defined in globals.css so toggling `.dark` on <html> flips the whole
- * palette. Hex values stayed inline pre-Phase-F.
+ * palette. Palette matches the mobile apps (Plum + Coral + Butter +
+ * Pearl) so admin and customer/pro feel like the same product.
  */
 const c = (token: string) => `rgb(var(--${token}) / <alpha-value>)`;
 
@@ -36,6 +37,20 @@ const config: Config = {
           600: c('accent-600'),
           700: c('accent-700'),
         },
+        // Butter — top-tier badges, ratings, premium accents.
+        // Used sparingly so it stays special. Mirrors the mobile
+        // apps' `support` palette.
+        support: {
+          DEFAULT: c('support'),
+          50: c('support-50'),
+          100: c('support-100'),
+          200: c('support-200'),
+          300: c('support-300'),
+          400: c('support-400'),
+          500: c('support-500'),
+          600: c('support-600'),
+          700: c('support-700'),
+        },
         ink: {
           DEFAULT: c('ink'),
           muted: c('ink-muted'),
@@ -45,15 +60,17 @@ const config: Config = {
         surface: {
           DEFAULT: c('surface'),
           muted: c('surface-muted'),
+          subtle: c('surface-subtle'),
           raised: c('surface-raised'),
           inverse: c('surface-inverse'),
         },
+        // Trust-tier badge palette aligned with mobile (`mobile/badge.*`)
         badge: {
-          none: '#9CA3AF',
-          bronze: '#A77A2C',
+          none: '#9C8DB0',
+          bronze: '#B07C4A',
           silver: '#94A3B8',
-          gold: '#D4A24C',
-          platinum: '#22426E',
+          gold: '#F5C76A',
+          platinum: '#6B3B85',
         },
         success: c('success'),
         warning: c('warning'),
@@ -75,6 +92,7 @@ const config: Config = {
       },
       fontFamily: {
         sans: [
+          'Plus Jakarta Sans',
           'Inter',
           'ui-sans-serif',
           'system-ui',
@@ -83,7 +101,7 @@ const config: Config = {
           'Roboto',
           'sans-serif',
         ],
-        display: ['Inter', 'system-ui', 'sans-serif'],
+        display: ['Plus Jakarta Sans', 'Inter', 'system-ui', 'sans-serif'],
       },
       fontSize: {
         display: ['32px', { lineHeight: '38px', letterSpacing: '-0.5px' }],

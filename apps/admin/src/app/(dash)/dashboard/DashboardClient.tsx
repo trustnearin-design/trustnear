@@ -68,19 +68,22 @@ type ChartsData = {
   }>;
 };
 
-// Brand palette pulled from tailwind tokens (navy + gold). Recharts wants
-// raw hex so we redeclare here.
+// Brand palette pulled from tailwind tokens (plum + coral + butter).
+// Recharts wants raw hex so we redeclare here. Mirrors
+// apps/customer/src/theme/colors.ts (the source of truth) and stays
+// in lockstep with apps/admin/src/app/globals.css.
 const PALETTE = {
-  brand: '#0B1F3A',
-  brandLight: '#3454A0',
-  accent: '#D4A24C',
-  accentDeep: '#9C6F22',
-  success: '#16A34A',
-  warning: '#EAB308',
-  danger: '#DC2626',
-  ink: '#0F172A',
-  inkMuted: '#64748B',
-  border: '#E2E8F0',
+  brand: '#3D1F4E', // plum
+  brandLight: '#6B3B85', // plum-600
+  accent: '#FF7A5C', // coral
+  accentDeep: '#B83E25', // coral-700
+  support: '#F5C76A', // butter (top-tier highlight)
+  success: '#2D7A4F',
+  warning: '#C77A1A',
+  danger: '#C2362A',
+  ink: '#1A1226',
+  inkMuted: '#5B4868',
+  border: '#EAE3DA',
 };
 
 // ─── Page ─────────────────────────────────────────────────────────────
@@ -560,7 +563,7 @@ function FunnelView({ funnel }: { funnel: Record<string, number> }) {
             <div className="relative h-7 overflow-hidden rounded bg-surface-muted">
               <div
                 className={`h-full ${
-                  s.tone === 'bg-brand-light' ? 'bg-[#3454A0]' : s.tone
+                  s.tone === 'bg-brand-light' ? 'bg-brand-500' : s.tone
                 } transition-all duration-500`}
                 style={{ width: `${Math.max(width, count > 0 ? 4 : 0)}%` }}
               />

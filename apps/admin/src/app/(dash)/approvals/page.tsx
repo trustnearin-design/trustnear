@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { apiFetch } from '@/lib/api';
 import { formatRelativeDate } from '@/lib/format';
 import { PageHeader } from '@/components/PageHeader';
+import { EmptyState } from '@/components/EmptyState';
 
 /**
  * Pro Onboarding Approvals queue (Phase 3g).
@@ -89,12 +90,20 @@ export default async function ApprovalsPage({
       </div>
 
       {rows.length === 0 ? (
-        <div className="card p-12 text-center">
-          <p className="text-body text-ink-subtle">
-            No pros in this bucket.
-            {activeFilter === 'submitted_for_review' &&
-              ' Onboarding wizard submissions will land here.'}
-          </p>
+        <div className="card">
+          <EmptyState
+            mascot="verified"
+            title={
+              activeFilter === 'submitted_for_review'
+                ? 'Queue clear! Koi review pending nahi'
+                : 'Is bucket me koi pro nahi'
+            }
+            subtitle={
+              activeFilter === 'submitted_for_review'
+                ? 'Pro onboarding wizard submissions yahaan land hote hain. Wait karo — aate hi notify ho jaayega.'
+                : undefined
+            }
+          />
         </div>
       ) : (
         <div className="card overflow-hidden">

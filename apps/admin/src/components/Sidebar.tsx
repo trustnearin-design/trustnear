@@ -99,20 +99,28 @@ export function Sidebar({
 
   return (
     <aside className="fixed inset-y-0 left-0 z-20 flex w-64 flex-col bg-nav text-nav-fg">
-      {/* Lockup */}
-      <div className="border-b border-nav-border px-6 py-5">
-        <div className="flex items-center gap-3">
+      {/* Lockup — plum strip with TrustNear identity */}
+      <div className="relative border-b border-nav-border px-6 py-5">
+        <div
+          aria-hidden
+          className="pointer-events-none absolute -right-4 -top-4 h-20 w-20 rounded-full bg-brand-600/40 blur-2xl"
+        />
+        <div className="relative flex items-center gap-3">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src="/icon.png"
             alt="TrustNear"
-            width={40}
-            height={40}
-            className="rounded-card shadow-[0_2px_12px_rgba(61,31,78,0.45)]"
+            width={44}
+            height={44}
+            className="rounded-card shadow-[0_4px_14px_rgba(61,31,78,0.55)]"
           />
           <div>
-            <p className="text-body font-bold leading-tight">TrustNear</p>
-            <p className="text-caption text-nav-fg-muted">Admin Console</p>
+            <p className="font-display text-h3 font-extrabold leading-tight tracking-tight">
+              TrustNear
+            </p>
+            <p className="mt-0.5 text-caption font-semibold uppercase tracking-[1.5px] text-nav-fg-muted">
+              Admin Console
+            </p>
           </div>
         </div>
       </div>
@@ -144,7 +152,7 @@ export function Sidebar({
           <ThemeToggle />
         </div>
         <div className="flex items-center gap-3 rounded-card bg-nav-raised px-3 py-2">
-          <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-accent/20 text-small font-semibold text-accent">
+          <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-accent text-small font-bold text-ink-inverse shadow-[0_2px_8px_rgba(255,122,92,0.35)]">
             {(user.fullName ?? user.phone).charAt(0).toUpperCase()}
           </span>
           <div className="min-w-0 flex-1">
@@ -181,16 +189,23 @@ function NavSection({
               href={item.href as never}
               prefetch
               className={
-                'group flex items-center gap-3 rounded-card px-3 py-2.5 text-small font-medium transition ' +
+                'group relative flex items-center gap-3 rounded-card px-3 py-2.5 text-small font-semibold transition ' +
                 (active
-                  ? 'bg-accent text-[#0B1F3A] shadow-[0_2px_8px_rgba(212,162,76,0.4)]'
-                  : 'text-nav-fg-muted hover:bg-nav-raised hover:text-nav-fg')
+                  ? 'bg-nav-raised text-nav-fg shadow-[0_2px_10px_rgba(34,16,47,0.5)]'
+                  : 'text-nav-fg-muted hover:bg-nav-raised/60 hover:text-nav-fg')
               }
             >
+              {/* Coral left accent rail on active items — matches mobile pressed-state pattern */}
+              {active && (
+                <span
+                  aria-hidden
+                  className="absolute inset-y-1 left-0 w-1 rounded-r-full bg-accent shadow-[0_0_8px_rgba(255,122,92,0.65)]"
+                />
+              )}
               <item.Icon
                 className={
-                  'h-[18px] w-[18px] shrink-0 ' +
-                  (active ? 'text-[#0B1F3A]' : 'text-nav-fg-subtle group-hover:text-accent')
+                  'h-[18px] w-[18px] shrink-0 transition ' +
+                  (active ? 'text-accent' : 'text-nav-fg-subtle group-hover:text-accent')
                 }
                 strokeWidth={2}
               />
@@ -200,8 +215,8 @@ function NavSection({
                   className={
                     'rounded-pill px-2 py-0.5 text-caption font-bold ' +
                     (active
-                      ? 'bg-[#0B1F3A] text-accent'
-                      : 'bg-accent text-[#0B1F3A] shadow-[0_1px_4px_rgba(212,162,76,0.5)]')
+                      ? 'bg-accent text-ink-inverse'
+                      : 'bg-accent text-ink-inverse shadow-[0_1px_4px_rgba(255,122,92,0.45)]')
                   }
                 >
                   {badge > 99 ? '99+' : badge}

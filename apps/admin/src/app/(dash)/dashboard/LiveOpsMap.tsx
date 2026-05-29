@@ -169,9 +169,9 @@ export function LiveOpsMap() {
             icon={{
               path: 'M -2,-2 L 2,-2 L 2,2 L -2,2 z',
               scale: 4,
-              fillColor: '#0B1F3A',
+              fillColor: '#3D1F4E',
               fillOpacity: 0.95,
-              strokeColor: '#D4A24C',
+              strokeColor: '#FF7A5C',
               strokeWeight: 2,
             }}
             title={b.bookingNumber}

@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { apiFetch } from '@/lib/api';
 import { formatRelativeDate } from '@/lib/format';
 import { PageHeader } from '@/components/PageHeader';
+import { EmptyState } from '@/components/EmptyState';
 
 type Banner = {
   id: string;
@@ -59,10 +60,17 @@ export default async function BannersPage() {
       />
 
       {banners.length === 0 ? (
-        <div className="card p-12 text-center">
-          <p className="text-body text-ink-subtle">
-            No banners yet. Create your first to take over the customer home screen.
-          </p>
+        <div className="card">
+          <EmptyState
+            mascot="toolbox"
+            title="Abhi koi banner nahi hai"
+            subtitle="Customer home par dikhane ke liye pehla banner upload karein."
+            action={
+              <Link href="/banners/new" className="btn-primary text-small">
+                + Create first banner
+              </Link>
+            }
+          />
         </div>
       ) : (
         <div className="space-y-5">

@@ -6,6 +6,7 @@ import { Send, Trash2 } from 'lucide-react';
 import { clientFetch } from '@/lib/api-client';
 import { formatCount, formatRelativeDate } from '@/lib/format';
 import { SkeletonTable } from '@/components/Skeletons';
+import { EmptyState } from '@/components/EmptyState';
 
 type Announcement = {
   id: string;
@@ -69,8 +70,12 @@ export function AnnouncementsClient() {
   const items = list.data?.items ?? [];
   if (items.length === 0) {
     return (
-      <div className="card p-12 text-center">
-        <p className="text-body text-ink-subtle">No announcements yet. Create the first one.</p>
+      <div className="card">
+        <EmptyState
+          mascot="waving"
+          title="Abhi koi announcement nahi"
+          subtitle="Customer / Pro apps me push broadcast bhejne ke liye pehla announcement banao."
+        />
       </div>
     );
   }

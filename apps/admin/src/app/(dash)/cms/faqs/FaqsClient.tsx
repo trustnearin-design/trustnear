@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { Eye, EyeOff, Trash2 } from 'lucide-react';
 import { clientFetch } from '@/lib/api-client';
 import { SkeletonBar } from '@/components/Skeletons';
+import { EmptyState } from '@/components/EmptyState';
 
 type Faq = {
   id: string;
@@ -68,10 +69,17 @@ export function FaqsClient() {
   }
   if (grouped.length === 0) {
     return (
-      <div className="card p-12 text-center">
-        <p className="text-body text-ink-subtle">
-          No FAQs yet. Add the first one to seed the help center.
-        </p>
+      <div className="card">
+        <EmptyState
+          mascot="verified"
+          title="Abhi koi FAQ nahi hai"
+          subtitle="Customers + Pros ko help dene ke liye pehli FAQ add karo."
+          action={
+            <Link href="/cms/faqs/new" className="btn-primary text-small">
+              + Add first FAQ
+            </Link>
+          }
+        />
       </div>
     );
   }

@@ -6,6 +6,7 @@ import { CheckCircle2, FileText } from 'lucide-react';
 import { clientFetch } from '@/lib/api-client';
 import { formatRelativeDate } from '@/lib/format';
 import { SkeletonBar } from '@/components/Skeletons';
+import { EmptyState } from '@/components/EmptyState';
 
 type LegalRow = {
   id: string;
@@ -58,10 +59,12 @@ export function LegalClient() {
 
   if (grouped.size === 0) {
     return (
-      <div className="card p-12 text-center">
-        <p className="text-body text-ink-subtle">
-          No legal pages yet. Create your first Terms / Privacy / Refund page.
-        </p>
+      <div className="card">
+        <EmptyState
+          mascot="verified"
+          title="Abhi koi legal page nahi"
+          subtitle="Terms / Privacy / Refund pages add karo — apps me embed ho jaayenge."
+        />
       </div>
     );
   }

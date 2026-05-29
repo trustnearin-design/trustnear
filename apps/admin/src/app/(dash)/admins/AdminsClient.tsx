@@ -7,6 +7,7 @@ import { ShieldAlert, Crown, Wrench, Banknote, Headphones } from 'lucide-react';
 import { clientFetch, qs } from '@/lib/api-client';
 import { formatRelativeDate } from '@/lib/format';
 import { SkeletonTable } from '@/components/Skeletons';
+import { EmptyState } from '@/components/EmptyState';
 
 type AdminUser = {
   id: string;
@@ -95,11 +96,12 @@ export function AdminsClient({ currentUserId }: { currentUserId: string }) {
       </div>
 
       {items.length === 0 ? (
-        <div className="card p-12 text-center">
-          <p className="text-body text-ink-subtle">
-            No admins yet. Use <code className="font-mono">scripts/create-admin.mjs</code> to
-            bootstrap the first one.
-          </p>
+        <div className="card">
+          <EmptyState
+            mascot="confident"
+            title="Abhi koi admin nahi"
+            subtitle="Use scripts/create-admin.mjs to bootstrap the first super-admin from the terminal."
+          />
         </div>
       ) : (
         <div className="card overflow-hidden">
@@ -205,7 +207,7 @@ export function AdminsClient({ currentUserId }: { currentUserId: string }) {
 
 function RolePill({ role }: { role: 'super' | 'ops' | 'finance' | 'support' }) {
   const conf: Record<string, { tone: string; Icon: typeof Crown }> = {
-    super: { tone: 'bg-accent text-[#0B1F3A]', Icon: Crown },
+    super: { tone: 'bg-accent text-ink-inverse', Icon: Crown },
     ops: { tone: 'bg-brand-100 text-brand-700', Icon: Wrench },
     finance: { tone: 'bg-success/15 text-success', Icon: Banknote },
     support: { tone: 'bg-brand-200/40 text-brand-700', Icon: Headphones },

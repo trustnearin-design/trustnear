@@ -4,7 +4,10 @@
  */
 
 export function SkeletonBar({ className = '' }: { className?: string }) {
-  return <div className={`animate-pulse rounded bg-surface-muted ${className}`} />;
+  // Plum-tinted shimmer (brand-100) reads as brand-aware loading state,
+  // not generic gray. Subtle enough that it doesn't compete with the
+  // real card content.
+  return <div className={`animate-pulse rounded bg-brand-100/70 ${className}`} />;
 }
 
 export function SkeletonMetricGrid({ count = 4 }: { count?: number }) {

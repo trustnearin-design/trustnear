@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { apiFetch } from '@/lib/api';
 import { formatPaise } from '@/lib/format';
 import { PageHeader } from '@/components/PageHeader';
+import { EmptyState } from '@/components/EmptyState';
 
 type Category = {
   id: string;
@@ -54,10 +55,17 @@ export default async function CategoriesPage() {
       />
 
       {parents.length === 0 ? (
-        <div className="card p-12 text-center">
-          <p className="text-body text-ink-subtle">
-            No categories yet. Create your first parent category.
-          </p>
+        <div className="card">
+          <EmptyState
+            mascot="toolbox"
+            title="Abhi koi category nahi hai"
+            subtitle="Pehli parent category banao taaki Pros aur Customers ko services dikhe."
+            action={
+              <Link href="/categories/new" className="btn-primary text-small">
+                + Create first category
+              </Link>
+            }
+          />
         </div>
       ) : (
         <div className="space-y-5">
