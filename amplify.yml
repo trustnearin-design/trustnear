@@ -16,7 +16,14 @@ applications:
             # Skip pnpm CLI (its runDepsStatusCheck subprocess EACCESes
             # in CodeBuild — builds #1-4). Just invoke next directly.
             # CWD here is repo root, so cd into apps/admin first.
-            - cd apps/admin && node_modules/.bin/next build
+            # next binary lives at the HOISTED root node_modules — the
+            # workspace's node-linker=hoisted pnpm setup puts every bin
+            # at <repo>/node_modules/.bin, NOT at apps/admin/node_modules/.bin
+            # (build #9 confirmed `cd apps/admin && node_modules/.bin/next`
+            # gives "No such file or directory"). Walk back up to the
+            # hoisted bin while keeping CWD inside apps/admin so next
+            # discovers the right next.config.ts + src/app/ layout.
+            - cd apps/admin && ../../node_modules/.bin/next build
       artifacts:
         # baseDirectory is relative to appRoot, so apps/admin/.next/
         baseDirectory: .next
