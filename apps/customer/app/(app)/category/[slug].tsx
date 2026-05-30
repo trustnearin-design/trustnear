@@ -1,5 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ScrollView, View, Text, Pressable, ActivityIndicator, RefreshControl } from 'react-native';
+import {
+  ScrollView,
+  View,
+  Text,
+  Pressable,
+  ActivityIndicator,
+  RefreshControl,
+  Alert,
+} from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
@@ -338,9 +346,14 @@ function ParentLanding({
           eyebrow="LIMITED · TIME"
           title={`First booking in\n${category.name} 20% off`}
           subtitle="Use code FIRST20 at checkout"
-          ctaLabel="Browse services"
+          ctaLabel="How to redeem"
           tint="plum"
-          onPress={() => {}}
+          onPress={() =>
+            Alert.alert(
+              'FIRST20 · 20% off',
+              'Apply code FIRST20 at checkout on your first booking to get 20% off (up to ₹150). Pick a service below to get started.',
+            )
+          }
         />
       </View>
 

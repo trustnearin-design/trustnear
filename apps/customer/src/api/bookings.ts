@@ -69,6 +69,7 @@ export interface BookingDetail {
   addressLng: string | number;
   notes: string | null;
   basePrice: number;
+  promoDiscount: number;
   totalAmount: number;
   paymentStatus: string;
   cancellationReason: string | null;
@@ -102,6 +103,19 @@ export interface CreateBookingInput {
   addressCity?: string;
   notes?: string;
   preferredProId?: string;
+  promoCode?: string;
+}
+
+export interface ValidatePromoResult {
+  valid: boolean;
+  code: string;
+  /** Set when valid === false — the reason to show inline. */
+  message?: string;
+  basePrice: number;
+  platformFee: number;
+  discountPaise: number;
+  /** base + fee − discount, in paise. */
+  totalPaise: number;
 }
 
 export interface CreateBookingResult {
@@ -145,6 +159,21 @@ export function useCreateBooking() {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['bookings.mine'] });
     },
+  });
+}
+
+/**
+ * Preview a promo code against a prospective booking. Returns the discount +
+ * new total so the book screen can show "applied" state before confirming.
+ * `valid: false` (with a `message`) is a normal outcome, not an error.
+ */
+export function useValidatePromo() {
+  return useMutation({
+    mutationFn: (input: { code: string; categoryId: string; durationMinutes: number }) =>
+      apiFetch<ValidatePromoResult>('/bookings/promo/validate', {
+        method: 'POST',
+        body: input,
+      }),
   });
 }
 

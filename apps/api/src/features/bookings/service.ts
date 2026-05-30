@@ -23,6 +23,7 @@ import {
   notifyBookingMatched,
 } from '../notifications/service.js';
 import { calculatePrice } from './pricing.js';
+import { resolvePromo } from './promo.js';
 import { assertTransition, isTerminal } from './state-machine.js';
 import { clearMatchState, handleProDeclined, sendJobAlert } from './match-orchestrator.js';
 
@@ -81,6 +82,29 @@ export async function createBooking(input: CreateBookingInput): Promise<{
     durationMinutes: input.durationMinutes,
   });
 
+  // Resolve a promo code if supplied. The discount comes off the platform's
+  // take (subtotal = base + safety fee) — the pro's payout is unaffected. An
+  // invalid code throws so the customer learns now, not after paying.
+  let promoCodeId: string | null = null;
+  if (input.promoCode) {
+    const subtotalPaise = price.basePrice + price.platformFee;
+    const promo = await resolvePromo({
+      code: input.promoCode,
+      customerId: input.customerId,
+      subtotalPaise,
+    });
+    if (!promo.ok) {
+      throw new DomainError(
+        promo.errorCode ?? ErrorCode.SL_404_PROMO_INVALID,
+        promo.reason ?? 'Promo code could not be applied',
+        422,
+      );
+    }
+    promoCodeId = promo.promoCodeId ?? null;
+    price.promoDiscount = promo.discountPaise ?? 0;
+    price.totalAmount = Math.max(0, subtotalPaise - price.promoDiscount);
+  }
+
   // Match attempt — look for online pros near the address for this category
   const category = await prisma.serviceCategory.findUnique({
     where: { id: input.categoryId },
@@ -131,31 +155,44 @@ export async function createBooking(input: CreateBookingInput): Promise<{
   const otpHash = sha256(otpPlain);
   const otpExpiresAt = new Date(input.scheduledAt.getTime() + BOOKING_OTP_TTL_MINUTES * 60 * 1000);
 
-  const booking = await prisma.booking.create({
-    data: {
-      bookingNumber: generateBookingNumber(),
-      customerId: input.customerId,
-      professionalId: matchedProId,
-      categoryId: input.categoryId,
-      status: initialStatus,
-      scheduledAt: input.scheduledAt,
-      durationMinutes: input.durationMinutes,
-      addressLine: input.addressLine,
-      addressLat: input.addressLat,
-      addressLng: input.addressLng,
-      addressArea: input.addressArea ?? null,
-      addressCity: input.addressCity,
-      otpCodeHash: otpHash,
-      otpExpiresAt,
-      basePrice: price.basePrice,
-      platformFee: price.platformFee,
-      promoDiscount: price.promoDiscount,
-      commission: price.commission,
-      totalAmount: price.totalAmount,
-      proPayout: price.proPayout,
-      notes: input.notes ?? null,
-    },
-    select: { id: true, bookingNumber: true, status: true },
+  // Booking insert + promo usage bump land together so a redeemed code is
+  // always counted (or neither happens). The usage check above is best-effort
+  // against races — at MVP scale a rare +1 oversell on a limited code is fine.
+  const booking = await prisma.$transaction(async (tx) => {
+    const created = await tx.booking.create({
+      data: {
+        bookingNumber: generateBookingNumber(),
+        customerId: input.customerId,
+        professionalId: matchedProId,
+        categoryId: input.categoryId,
+        status: initialStatus,
+        scheduledAt: input.scheduledAt,
+        durationMinutes: input.durationMinutes,
+        addressLine: input.addressLine,
+        addressLat: input.addressLat,
+        addressLng: input.addressLng,
+        addressArea: input.addressArea ?? null,
+        addressCity: input.addressCity,
+        otpCodeHash: otpHash,
+        otpExpiresAt,
+        basePrice: price.basePrice,
+        platformFee: price.platformFee,
+        promoDiscount: price.promoDiscount,
+        commission: price.commission,
+        totalAmount: price.totalAmount,
+        proPayout: price.proPayout,
+        notes: input.notes ?? null,
+        ...(promoCodeId ? { promoCodeId } : {}),
+      },
+      select: { id: true, bookingNumber: true, status: true },
+    });
+    if (promoCodeId) {
+      await tx.promoCode.update({
+        where: { id: promoCodeId },
+        data: { usageCount: { increment: 1 } },
+      });
+    }
+    return created;
   });
 
   logger.info(
@@ -189,6 +226,62 @@ export async function createBooking(input: CreateBookingInput): Promise<{
     bookingNumber: booking.bookingNumber,
     status: booking.status,
     otp: otpPlain,
+  };
+}
+
+/**
+ * Preview a promo code against a prospective booking — backs the customer's
+ * "Apply" button so they see the discount before confirming. Never throws on
+ * an invalid code; returns `valid: false` + a human message instead, since a
+ * bad code here is normal UX, not an error.
+ */
+export async function validatePromoForBooking(args: {
+  customerId: string;
+  code: string;
+  categoryId: string;
+  durationMinutes: number;
+}): Promise<{
+  valid: boolean;
+  code: string;
+  message?: string;
+  basePrice: number;
+  platformFee: number;
+  discountPaise: number;
+  totalPaise: number;
+}> {
+  const price = await calculatePrice({
+    categoryId: args.categoryId,
+    durationMinutes: args.durationMinutes,
+  });
+  const subtotalPaise = price.basePrice + price.platformFee;
+  const normalizedCode = args.code.trim().toUpperCase();
+
+  const promo = await resolvePromo({
+    code: args.code,
+    customerId: args.customerId,
+    subtotalPaise,
+  });
+
+  if (!promo.ok) {
+    return {
+      valid: false,
+      code: normalizedCode,
+      message: promo.reason ?? 'Promo code could not be applied',
+      basePrice: price.basePrice,
+      platformFee: price.platformFee,
+      discountPaise: 0,
+      totalPaise: subtotalPaise,
+    };
+  }
+
+  const discountPaise = promo.discountPaise ?? 0;
+  return {
+    valid: true,
+    code: promo.code ?? normalizedCode,
+    basePrice: price.basePrice,
+    platformFee: price.platformFee,
+    discountPaise,
+    totalPaise: Math.max(0, subtotalPaise - discountPaise),
   };
 }
 

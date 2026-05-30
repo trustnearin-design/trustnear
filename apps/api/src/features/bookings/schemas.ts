@@ -24,6 +24,17 @@ export const CancelBookingInputSchema = z.object({
   reason: z.string().trim().min(3).max(500),
 });
 
+export const ValidatePromoInputSchema = z.object({
+  code: z.string().trim().min(1).max(20),
+  categoryId: UuidSchema,
+  durationMinutes: z
+    .number()
+    .int()
+    .min(30)
+    .max(8 * 60)
+    .default(60),
+});
+
 export const VerifyBookingOtpInputSchema = z.object({
   otp: OtpSchema,
 });

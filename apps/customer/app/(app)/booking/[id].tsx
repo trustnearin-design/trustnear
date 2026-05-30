@@ -474,6 +474,14 @@ function PriceCard({ booking }: { booking: BookingDetail }) {
           {priceUnitLabel(booking.category.priceUnit)}
         </Text>
       </View>
+      {booking.promoDiscount > 0 ? (
+        <View className="mt-2 flex-row items-center">
+          <Ionicons name="pricetag" size={13} color={colors.success} />
+          <Text className="ml-1.5 text-xs font-semibold text-success">
+            Promo discount applied · −{formatRupees(booking.promoDiscount)}
+          </Text>
+        </View>
+      ) : null}
       <Text className="mt-1 text-[11px] text-ink-subtle">
         Payment status: {booking.paymentStatus}
       </Text>

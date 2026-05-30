@@ -8,6 +8,7 @@ import {
   CancelBookingInputSchema,
   CreateBookingInputSchema,
   ListBookingsQuerySchema,
+  ValidatePromoInputSchema,
   VerifyBookingOtpInputSchema,
 } from './schemas.js';
 import {
@@ -15,6 +16,7 @@ import {
   getBookingDetail,
   listBookings,
   transitionBooking,
+  validatePromoForBooking,
   verifyBookingOtp,
 } from './service.js';
 
@@ -50,6 +52,26 @@ bookings.post('/', validator('json', CreateBookingInputSchema), async (c) => {
   });
 
   return success(c, result, undefined, 201);
+});
+
+/**
+ * POST /api/v1/bookings/promo/validate — preview a promo code's discount for
+ * a prospective booking (customer only). Returns valid:false + a message for
+ * a bad code rather than erroring. Registered before /:id routes.
+ */
+bookings.post('/promo/validate', validator('json', ValidatePromoInputSchema), async (c) => {
+  const user = c.get('user');
+  if (user.role !== 'customer') {
+    throw new ForbiddenError('Only customers can validate promo codes');
+  }
+  const input = c.req.valid('json');
+  const result = await validatePromoForBooking({
+    customerId: user.sub,
+    code: input.code,
+    categoryId: input.categoryId,
+    durationMinutes: input.durationMinutes,
+  });
+  return success(c, result);
 });
 
 /**

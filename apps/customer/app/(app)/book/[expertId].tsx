@@ -15,7 +15,11 @@ import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
 import { useProDetail } from '../../../src/api/discovery';
-import { useCreateBooking } from '../../../src/api/bookings';
+import {
+  useCreateBooking,
+  useValidatePromo,
+  type ValidatePromoResult,
+} from '../../../src/api/bookings';
 import {
   FALLBACK_COORDS,
   getCurrentCoords,
@@ -76,9 +80,10 @@ const DURATION_PRESETS = [60, 90, 120, 180] as const;
 export default function BookExpertScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { expertId } = useLocalSearchParams<{ expertId: string }>();
+  const { expertId, promo } = useLocalSearchParams<{ expertId: string; promo?: string }>();
   const expert = useProDetail(expertId);
   const createBooking = useCreateBooking();
+  const validatePromo = useValidatePromo();
 
   const offerings = expert.data?.serviceOfferings ?? [];
   const [categoryId, setCategoryId] = useState<string | null>(null);
@@ -92,10 +97,49 @@ export default function BookExpertScreen() {
   const [locating, setLocating] = useState(true);
   const [usingFallback, setUsingFallback] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [promoInput, setPromoInput] = useState((promo ?? '').toUpperCase());
+  const [appliedPromo, setAppliedPromo] = useState<ValidatePromoResult | null>(null);
+  const [promoError, setPromoError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!categoryId && offerings[0]) setCategoryId(offerings[0].category.id);
   }, [offerings, categoryId]);
+
+  // Discount depends on category + duration — drop any applied promo when
+  // either changes so the customer can't carry a stale discount into a
+  // different service/price.
+  useEffect(() => {
+    setAppliedPromo(null);
+    setPromoError(null);
+  }, [categoryId, duration]);
+
+  const onApplyPromo = async () => {
+    const code = promoInput.trim().toUpperCase();
+    if (!code || !categoryId) return;
+    setPromoError(null);
+    try {
+      const res = await validatePromo.mutateAsync({
+        code,
+        categoryId,
+        durationMinutes: duration,
+      });
+      if (res.valid) {
+        setAppliedPromo(res);
+      } else {
+        setAppliedPromo(null);
+        setPromoError(res.message ?? 'Invalid promo code');
+      }
+    } catch (e) {
+      setAppliedPromo(null);
+      setPromoError(e instanceof ApiCallError ? e.message : 'Could not check code. Try again.');
+    }
+  };
+
+  const onRemovePromo = () => {
+    setAppliedPromo(null);
+    setPromoError(null);
+    setPromoInput('');
+  };
 
   const resolveLocation = async () => {
     setLocating(true);
@@ -133,6 +177,13 @@ export default function BookExpertScreen() {
     return perUnit;
   }, [selectedOffering, duration]);
 
+  // What the customer sees they'll pay — estimate minus any applied discount.
+  // The server reconfirms the exact figure at booking time.
+  const displayTotal =
+    appliedPromo?.valid && priceEstimate !== null
+      ? Math.max(0, priceEstimate - appliedPromo.discountPaise)
+      : priceEstimate;
+
   const slot = SLOTS.find((s) => s.key === slotKey);
   const composedAddress = useMemo(() => {
     const parts = [
@@ -168,6 +219,7 @@ export default function BookExpertScreen() {
         ...(resolved?.area ? { addressArea: resolved.area } : {}),
         preferredProId: expertId,
         ...(notes.trim() ? { notes: notes.trim() } : {}),
+        ...(appliedPromo?.valid ? { promoCode: appliedPromo.code } : {}),
       });
       await saveBookingOtp(res.bookingId, res.otp);
       router.replace({
@@ -450,14 +502,87 @@ export default function BookExpertScreen() {
                 />
               </View>
 
+              <SectionTitle>Promo code</SectionTitle>
+              <View className="px-5">
+                {appliedPromo?.valid ? (
+                  <View className="flex-row items-center justify-between rounded-card border border-success/30 bg-success/5 p-3">
+                    <View className="flex-1 flex-row items-center">
+                      <Ionicons name="pricetag" size={16} color={colors.success} />
+                      <Text className="ml-2 text-sm font-bold text-success">
+                        {appliedPromo.code}
+                      </Text>
+                      <Text className="ml-2 text-xs text-ink-muted">
+                        −{formatRupees(appliedPromo.discountPaise)} applied
+                      </Text>
+                    </View>
+                    <Pressable onPress={onRemovePromo} hitSlop={8}>
+                      <Ionicons name="close-circle" size={20} color={colors.ink.subtle} />
+                    </Pressable>
+                  </View>
+                ) : (
+                  <View className="flex-row">
+                    <TextInput
+                      value={promoInput}
+                      onChangeText={(t) => setPromoInput(t.toUpperCase())}
+                      placeholder="Enter code (e.g. FIRST20)"
+                      placeholderTextColor="#94A3B8"
+                      autoCapitalize="characters"
+                      autoCorrect={false}
+                      className="flex-1 rounded-card border border-border bg-surface-muted px-4 py-3 text-sm text-ink"
+                    />
+                    <Pressable
+                      onPress={() => void onApplyPromo()}
+                      disabled={!promoInput.trim() || !categoryId || validatePromo.isPending}
+                      className={`ml-2 items-center justify-center rounded-card px-5 ${
+                        promoInput.trim() && categoryId && !validatePromo.isPending
+                          ? 'bg-brand'
+                          : 'bg-brand/40'
+                      }`}
+                    >
+                      {validatePromo.isPending ? (
+                        <ActivityIndicator color="#fff" />
+                      ) : (
+                        <Text className="text-sm font-bold text-ink-inverse">Apply</Text>
+                      )}
+                    </Pressable>
+                  </View>
+                )}
+                {promoError ? <Text className="mt-2 text-xs text-danger">{promoError}</Text> : null}
+              </View>
+
               {priceEstimate !== null ? (
                 <View className="mx-5 mt-5 rounded-card border border-border bg-surface-muted p-4">
-                  <View className="flex-row items-center justify-between">
-                    <Text className="text-xs text-ink-muted">Estimated price</Text>
-                    <Text className="text-lg font-bold text-brand">
-                      {formatRupees(priceEstimate)}
-                    </Text>
-                  </View>
+                  {appliedPromo?.valid ? (
+                    <>
+                      <View className="flex-row items-center justify-between">
+                        <Text className="text-xs text-ink-muted">Estimated price</Text>
+                        <Text className="text-sm text-ink-muted line-through">
+                          {formatRupees(priceEstimate)}
+                        </Text>
+                      </View>
+                      <View className="mt-1 flex-row items-center justify-between">
+                        <Text className="text-xs font-semibold text-success">
+                          Promo {appliedPromo.code}
+                        </Text>
+                        <Text className="text-sm font-semibold text-success">
+                          −{formatRupees(appliedPromo.discountPaise)}
+                        </Text>
+                      </View>
+                      <View className="mt-2 flex-row items-center justify-between border-t border-border pt-2">
+                        <Text className="text-xs font-bold text-ink">You pay</Text>
+                        <Text className="text-lg font-bold text-brand">
+                          {formatRupees(displayTotal ?? priceEstimate)}
+                        </Text>
+                      </View>
+                    </>
+                  ) : (
+                    <View className="flex-row items-center justify-between">
+                      <Text className="text-xs text-ink-muted">Estimated price</Text>
+                      <Text className="text-lg font-bold text-brand">
+                        {formatRupees(priceEstimate)}
+                      </Text>
+                    </View>
+                  )}
                   <Text className="mt-1 text-[11px] text-ink-subtle">
                     Final amount confirmed after service completion.
                   </Text>
@@ -497,7 +622,9 @@ export default function BookExpertScreen() {
               }
               void onSubmit();
             }}
-            {...(priceEstimate !== null ? { suffix: `· ${formatRupees(priceEstimate)}` } : {})}
+            {...(displayTotal !== null && displayTotal !== undefined
+              ? { suffix: `· ${formatRupees(displayTotal)}` }
+              : {})}
           />
         </View>
       </KeyboardAvoidingView>
