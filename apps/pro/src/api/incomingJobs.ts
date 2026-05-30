@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { AppState } from 'react-native';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiFetch, ApiCallError } from './client';
 import { getSocket } from '../lib/socket';
@@ -38,6 +39,20 @@ export interface IncomingJobAlert {
   proPayout: number;
 }
 
+/** Shape of one row from GET /pros/me/jobs?segment=pending (status=matched). */
+interface PendingJob {
+  id: string;
+  bookingNumber: string;
+  scheduledAt: string;
+  durationMinutes: number;
+  addressLine: string;
+  addressArea: string | null;
+  /** Optional — older API builds (pre-proPayout) omit it; replay falls back to 0. */
+  proPayout?: number;
+  category: { slug: string; name: string };
+  customer: { fullName: string; profilePhoto: string | null };
+}
+
 export interface IncomingJobController {
   current: IncomingJobAlert | null;
   /** Whole seconds left for the *current* alert (0 once expired). */
@@ -69,17 +84,68 @@ export function useIncomingJobAlerts(): IncomingJobController {
     setAcceptError(null);
   }, []);
 
+  // Push an alert into the queue, deduped by bookingId. Shared by the
+  // socket listener (live matches) and the pending-job replay (missed
+  // matches surfaced on app open / reconnect).
+  const enqueue = useCallback((payload: IncomingJobAlert) => {
+    setQueue((q) => {
+      if (q.some((a) => a.bookingId === payload.bookingId)) return q;
+      return [...q, payload];
+    });
+  }, []);
+
+  // ── Pending-job replay ───────────────────────────────────────────────
+  // The `job:new-match` socket event is transient — if the pro's app was
+  // closed (or the socket was reconnecting) when the customer booked, that
+  // ring is lost forever. So whenever the app becomes active we ask the
+  // backend for any `matched` jobs still awaiting our accept and surface
+  // them through the SAME overlay + ring. This is what makes the alert
+  // reliable in the real world where the app isn't always foregrounded.
+  const replayPending = useCallback(async () => {
+    try {
+      const res = await apiFetch<{ jobs: PendingJob[]; count: number }>(
+        '/pros/me/jobs?segment=pending',
+      );
+      for (const j of res.jobs) {
+        enqueue({
+          bookingId: j.id,
+          bookingNumber: j.bookingNumber,
+          // Synthetic deadline — the overlay's countdown is a visual
+          // heartbeat only (no server-side auto-timeout), so anchoring it
+          // to "now" is correct for a replayed alert.
+          expiresAt: new Date(Date.now() + 60_000).toISOString(),
+          customer: { fullName: j.customer.fullName, profilePhoto: j.customer.profilePhoto },
+          category: { slug: j.category.slug, name: j.category.name },
+          scheduledAt: j.scheduledAt,
+          durationMinutes: j.durationMinutes,
+          addressLine: j.addressLine,
+          addressArea: j.addressArea,
+          distanceKm: null,
+          // proPayout was added to the jobs API later — fall back to 0 so a
+          // staging API that predates it doesn't crash the overlay.
+          proPayout: j.proPayout ?? 0,
+        });
+      }
+    } catch {
+      // Best-effort — a failed replay just means no overlay this cycle;
+      // the Jobs tab still shows the pending job from its own query.
+    }
+  }, [enqueue]);
+
+  // Run once on mount + every time the app returns to the foreground.
+  useEffect(() => {
+    void replayPending();
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') void replayPending();
+    });
+    return () => sub.remove();
+  }, [replayPending]);
+
   // ── Socket subscription — always on whenever the user is authed ──────
   useEffect(() => {
     const socket = getSocket();
     const onNewMatch = (payload: IncomingJobAlert) => {
-      setQueue((q) => {
-        // Dedupe by bookingId; an at-most-once invariant prevents the
-        // ring from re-triggering if the backend re-emits the same
-        // match (e.g. after a brief reconnect).
-        if (q.some((a) => a.bookingId === payload.bookingId)) return q;
-        return [...q, payload];
-      });
+      enqueue(payload);
     };
     const onCancelled = (payload: { bookingId: string }) => {
       // Backend invalidated this match (customer cancelled, admin intervened,
@@ -87,13 +153,20 @@ export function useIncomingJobAlerts(): IncomingJobController {
       // booking that no longer exists for them.
       setQueue((q) => q.filter((a) => a.bookingId !== payload.bookingId));
     };
+    // On (re)connect, replay pending jobs — covers the gap where a match
+    // landed while the socket was down.
+    const onConnect = () => {
+      void replayPending();
+    };
     socket.on('job:new-match', onNewMatch);
     socket.on('job:match-cancelled', onCancelled);
+    socket.on('connect', onConnect);
     return () => {
       socket.off('job:new-match', onNewMatch);
       socket.off('job:match-cancelled', onCancelled);
+      socket.off('connect', onConnect);
     };
-  }, []);
+  }, [enqueue, replayPending]);
 
   // ── Ring control: start when a new top-of-queue appears, stop on drain
   useEffect(() => {

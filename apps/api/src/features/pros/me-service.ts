@@ -198,6 +198,7 @@ export async function getMyJobs(
     addressLine: string;
     addressArea: string | null;
     totalAmount: number;
+    proPayout: number;
     paymentStatus: string;
     category: { id: string; slug: string; name: string };
     customer: { id: string; fullName: string; profilePhoto: string | null };
@@ -228,6 +229,7 @@ export async function getMyJobs(
       addressLine: true,
       addressArea: true,
       totalAmount: true,
+      proPayout: true,
       paymentStatus: true,
       category: { select: { id: true, slug: true, name: true } },
       customer: { select: { id: true, fullName: true, profilePhoto: true } },
