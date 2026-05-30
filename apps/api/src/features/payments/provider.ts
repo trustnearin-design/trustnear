@@ -44,6 +44,13 @@ export interface CreateOrderResult {
   amountPaise: number;
   /** Provider name (cashfree/razorpay/etc) so caller can store it */
   provider: string;
+  /**
+   * Gateway environment the session was minted in. The mobile SDK MUST open
+   * the payment sheet in this same environment — a sandbox session opened in
+   * production (or vice-versa) is rejected as an unknown order. The client
+   * derives its CFEnvironment from this, NOT from __DEV__.
+   */
+  environment: 'sandbox' | 'production';
   /** Raw payload kept for audit/debugging */
   raw: unknown;
 }

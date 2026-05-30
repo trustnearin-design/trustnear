@@ -93,6 +93,7 @@ interface CashfreeWebhookData {
 
 export class CashfreePaymentProvider implements PaymentProvider {
   readonly name = 'cashfree' as const;
+  private readonly environment: 'sandbox' | 'production';
   private readonly baseUrl: string;
   private readonly appId: string;
   private readonly secretKey: string;
@@ -107,6 +108,7 @@ export class CashfreePaymentProvider implements PaymentProvider {
     if (!args.appId || !args.secretKey) {
       throw new Error('Cashfree: appId and secretKey are required');
     }
+    this.environment = args.environment;
     this.baseUrl = args.environment === 'production' ? PRODUCTION_URL : SANDBOX_URL;
     this.appId = args.appId;
     this.secretKey = args.secretKey;
@@ -133,12 +135,12 @@ export class CashfreePaymentProvider implements PaymentProvider {
       order_currency: 'INR',
       customer_details: {
         customer_id: input.customer.id,
-        customer_email: input.customer.email ?? `${input.customer.phone}@sevalink.placeholder`,
+        customer_email: input.customer.email ?? `${input.customer.phone}@trustnear.placeholder`,
         customer_phone: input.customer.phone.replace(/^\+91/, ''), // Cashfree wants 10-digit
         customer_name: input.customer.name,
       },
       order_meta: {
-        return_url: input.returnUrl ?? 'https://sevalink.in/booking/{order_id}',
+        return_url: input.returnUrl ?? 'https://trustnear.in/booking/{order_id}',
         notify_url: undefined as string | undefined,
         ...(input.notes ?? {}),
       },
@@ -179,6 +181,7 @@ export class CashfreePaymentProvider implements PaymentProvider {
       status: mapStatus(json.order_status ?? 'ACTIVE'),
       amountPaise: json.order_amount ? rupeesToPaise(json.order_amount) : input.amountPaise,
       provider: this.name,
+      environment: this.environment,
       raw: json,
     };
   }

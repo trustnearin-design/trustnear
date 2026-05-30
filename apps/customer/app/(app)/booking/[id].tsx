@@ -491,10 +491,14 @@ function PaymentCard({ booking, onPaid }: { booking: BookingDetail; onPaid: () =
     setError(null);
     try {
       const order = await createOrder.mutateAsync({ bookingId: booking.id });
+      // The SDK environment MUST match where the server minted the session.
+      // Trust the server's `environment`; fall back to __DEV__ only if an
+      // older API build didn't send it.
+      const sandbox = order.environment ? order.environment === 'sandbox' : __DEV__;
       const result = await startCashfreeWebPayment({
         sessionId: order.paymentSessionId,
         orderId: order.providerOrderId,
-        sandbox: __DEV__,
+        sandbox,
       });
       // Webhook usually wins the race, but verifying gives us instant UI
       // feedback. Either path ends with paymentStatus === 'paid'.

@@ -23,6 +23,8 @@ export interface CreatePaymentResult {
   providerOrderId: string;
   amountPaise: number;
   provider: string;
+  /** Gateway environment — the client opens its SDK in this same env. */
+  environment: 'sandbox' | 'production';
   status: string;
 }
 
@@ -111,6 +113,7 @@ export async function createPaymentForBooking(
     providerOrderId: order.providerOrderId,
     amountPaise: order.amountPaise,
     provider: order.provider,
+    environment: order.environment,
     status: order.status,
   };
 }

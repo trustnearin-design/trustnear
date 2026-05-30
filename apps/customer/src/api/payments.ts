@@ -11,6 +11,13 @@ export interface CreatePaymentOrderResult {
   providerOrderId: string;
   amountPaise: number;
   provider: 'cashfree' | 'razorpay' | string;
+  /**
+   * Gateway environment the session was minted in. The Cashfree SDK MUST be
+   * opened in this same environment — driving it off `__DEV__` breaks release
+   * APKs, where __DEV__ is false but staging mints sandbox sessions.
+   * Optional for back-compat with an API that predates this field.
+   */
+  environment?: 'sandbox' | 'production';
   status: string;
 }
 
