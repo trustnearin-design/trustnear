@@ -24,6 +24,7 @@ import {
   Crown,
   UserCheck,
   Send,
+  X,
   type LucideIcon,
 } from 'lucide-react';
 import { clientFetch } from '@/lib/api-client';
@@ -79,12 +80,18 @@ const SECONDARY_NAV: NavItem[] = [
 
 export function Sidebar({
   user,
+  open = false,
+  onClose,
 }: {
   user: {
     fullName: string | null;
     phone: string;
     adminRole: 'super' | 'ops' | 'finance' | 'support';
   };
+  /** Drawer open state on mobile (`< lg`). Ignored on desktop where the rail is always visible. */
+  open?: boolean;
+  /** Close the mobile drawer. */
+  onClose?: () => void;
 }) {
   const pathname = usePathname();
 
@@ -98,7 +105,14 @@ export function Sidebar({
   });
 
   return (
-    <aside className="fixed inset-y-0 left-0 z-20 flex w-64 flex-col bg-nav text-nav-fg">
+    <aside
+      className={
+        // Mobile (`< lg`): off-canvas drawer that slides in over the content,
+        // toggled by `open`. Desktop (`lg+`): fixed rail, always visible.
+        'fixed inset-y-0 left-0 z-40 flex w-72 max-w-[82vw] flex-col bg-nav text-nav-fg transition-transform duration-300 ease-out lg:z-20 lg:w-64 lg:max-w-none lg:translate-x-0 lg:shadow-none ' +
+        (open ? 'translate-x-0 shadow-2xl' : '-translate-x-full')
+      }
+    >
       {/* Lockup — plum strip with TrustNear identity */}
       <div className="relative border-b border-nav-border px-6 py-5">
         <div
@@ -122,6 +136,14 @@ export function Sidebar({
               Admin Console
             </p>
           </div>
+          {/* Close button — mobile drawer only */}
+          <button
+            onClick={onClose}
+            aria-label="Close menu"
+            className="relative ml-auto inline-flex h-9 w-9 items-center justify-center rounded-card text-nav-fg-muted transition hover:bg-nav-raised hover:text-nav-fg lg:hidden"
+          >
+            <X className="h-5 w-5" />
+          </button>
         </div>
       </div>
 
