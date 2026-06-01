@@ -239,6 +239,48 @@ export function useUploadPoliceDoc() {
   });
 }
 
+// ─── Step: Aadhaar document photos (Phase-1 manual) ───────────────────
+export type AadhaarSlot = 'front' | 'back' | 'selfie';
+
+export async function uploadAadhaarDoc(
+  uri: string,
+  slot: AadhaarSlot,
+  mime = 'image/jpeg',
+): Promise<{ ok: true; status: string; autoOk: boolean | null }> {
+  const token = useAuthStore.getState().accessToken;
+  const form = new FormData();
+  form.append('file', { uri, name: `aadhaar-${slot}.jpg`, type: mime } as unknown as Blob);
+  form.append('slot', slot);
+
+  const res = await fetch(`${apiBaseUrl}/api/v1/pros/me/onboarding/aadhaar-doc`, {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: form as unknown as BodyInit_,
+  });
+  // autoOk: server's SOFT Rekognition hint — true = looked valid, false =
+  // no Aadhaar text / no face (we warn but still allow), null = check skipped.
+  const json = (await res.json().catch(() => null)) as
+    | { success: true; data: { ok: true; status: string; autoOk: boolean | null } }
+    | { success: false; error: { code: string; message: string } }
+    | null;
+  if (!json || !json.success) {
+    throw new Error(json && 'error' in json ? json.error.message : `Upload failed (${res.status})`);
+  }
+  return json.data;
+}
+
+export function useUploadAadhaarDoc() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ uri, slot, mime }: { uri: string; slot: AadhaarSlot; mime?: string }) =>
+      uploadAadhaarDoc(uri, slot, mime),
+    onSuccess: () => invalidateOnboarding(qc),
+  });
+}
+
 // ─── Submit ───────────────────────────────────────────────────────────
 export function useSubmitForReview() {
   const qc = useQueryClient();
@@ -264,7 +306,7 @@ function invalidateOnboarding(qc: ReturnType<typeof useQueryClient>): void {
  * re-opens the app mid-flow.
  */
 export function nextStepRoute(status: OnboardingStatus): string {
-  const ORDER: WizardStepKey[] = [
+  const FULL_ORDER: WizardStepKey[] = [
     'personal',
     'photo',
     'services',
@@ -273,7 +315,24 @@ export function nextStepRoute(status: OnboardingStatus): string {
     'aadhaar',
     'pan',
     'bank',
+    'police',
   ];
+
+  // Rejected pro re-fixing: the admin flagged specific steps. Send them to
+  // the FIRST flagged step even if it's technically "done" (e.g. Aadhaar
+  // docs already uploaded) — they need to redo it. Without this, a flagged
+  // Aadhaar would be skipped and the pro lands on review with no re-upload.
+  if (status.approvalStatus === 'rejected' && status.rejectionFields.length > 0) {
+    for (const step of FULL_ORDER) {
+      if (status.rejectionFields.includes(step) && status.steps[step]) {
+        return `/(onboarding)/${step}`;
+      }
+    }
+  }
+
+  // Phase-1 required order — PAN + Bank are now optional, so they're not
+  // part of the auto-advance path (pro can still add them from review).
+  const ORDER: WizardStepKey[] = ['personal', 'photo', 'services', 'area', 'schedule', 'aadhaar'];
   for (const step of ORDER) {
     if (status.steps[step] && !status.steps[step].done) {
       return `/(onboarding)/${step}`;

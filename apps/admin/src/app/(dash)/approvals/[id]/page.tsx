@@ -28,6 +28,13 @@ type ReviewDetail = {
   aadhaarLastFour: string | null;
   aadhaarDob: string | null;
   aadhaarPhotoUrl: string | null;
+  aadhaarFrontUrl: string | null;
+  aadhaarBackUrl: string | null;
+  aadhaarSelfieUrl: string | null;
+  aadhaarDocStatus: string | null;
+  aadhaarFrontOk: boolean | null;
+  aadhaarBackOk: boolean | null;
+  aadhaarSelfieOk: boolean | null;
   panVerified: boolean;
   panNumber: string | null;
   panFullName: string | null;
@@ -217,22 +224,17 @@ export default async function ApprovalDetailPage({ params }: { params: Promise<{
           <Section title="KYC verification">
             <div className="space-y-3">
               <KycRow
-                label="Aadhaar (DigiLocker)"
+                label="Aadhaar (manual review)"
                 verified={pro.aadhaarVerified}
-                details={
-                  pro.aadhaarVerified
-                    ? `${pro.aadhaarFullName ?? '—'} · ****${pro.aadhaarLastFour ?? '—'} · DOB ${pro.aadhaarDob?.slice(0, 10) ?? '—'}`
-                    : null
-                }
+                details={`Docs: ${(pro.aadhaarDocStatus ?? 'not_uploaded').replace(/_/g, ' ')}${
+                  pro.aadhaarFullName ? ` · ${pro.aadhaarFullName}` : ''
+                }`}
               >
-                {pro.aadhaarPhotoUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={pro.aadhaarPhotoUrl}
-                    alt="Aadhaar photo"
-                    className="h-16 w-16 rounded-card object-cover"
-                  />
-                ) : null}
+                <div className="flex flex-wrap gap-3">
+                  <AadhaarShot label="Front" url={pro.aadhaarFrontUrl} ok={pro.aadhaarFrontOk} />
+                  <AadhaarShot label="Back" url={pro.aadhaarBackUrl} ok={pro.aadhaarBackOk} />
+                  <AadhaarShot label="Selfie" url={pro.aadhaarSelfieUrl} ok={pro.aadhaarSelfieOk} />
+                </div>
               </KycRow>
               <KycRow
                 label="PAN"
@@ -327,6 +329,48 @@ function KycRow({
         {details ? <p className="mt-0.5 text-caption text-ink-muted">{details}</p> : null}
       </div>
       {children}
+    </div>
+  );
+}
+
+function AadhaarShot({
+  label,
+  url,
+  ok,
+}: {
+  label: string;
+  url: string | null;
+  ok: boolean | null;
+}) {
+  // ok === false → auto-check flagged this image (no Aadhaar text / no face).
+  const flagged = ok === false;
+  return (
+    <div className="flex flex-col items-center gap-1">
+      <div className="relative">
+        {url ? (
+          <a href={url} target="_blank" rel="noreferrer">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={url}
+              alt={`Aadhaar ${label}`}
+              className={
+                'h-24 w-24 rounded-card border object-cover transition hover:opacity-80 ' +
+                (flagged ? 'border-2 border-danger' : 'border-border')
+              }
+            />
+          </a>
+        ) : (
+          <div className="flex h-24 w-24 items-center justify-center rounded-card border border-dashed border-border bg-surface-muted text-caption text-ink-subtle">
+            —
+          </div>
+        )}
+        {flagged ? (
+          <span className="absolute -right-1 -top-1 rounded-pill bg-danger px-1.5 py-0.5 text-[10px] font-bold text-white">
+            ⚠ check
+          </span>
+        ) : null}
+      </div>
+      <span className="text-caption font-semibold text-ink-muted">{label}</span>
     </div>
   );
 }

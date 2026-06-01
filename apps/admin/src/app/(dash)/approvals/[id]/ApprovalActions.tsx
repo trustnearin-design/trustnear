@@ -33,14 +33,113 @@ export function ApprovalActions({
   currentStatus: string;
 }) {
   const router = useRouter();
-  const [mode, setMode] = useState<'idle' | 'approving' | 'rejecting'>('idle');
+  const [mode, setMode] = useState<'idle' | 'approving' | 'rejecting' | 'revoking'>('idle');
   const [note, setNote] = useState('');
   const [reason, setReason] = useState('');
   const [fields, setFields] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
-  // Only submitted_for_review can be acted on
+  const handleRevoke = async () => {
+    setError(null);
+    if (reason.trim().length < 10) {
+      setError('Reason must be at least 10 characters');
+      return;
+    }
+    setMode('revoking');
+    try {
+      await clientFetch(`/api/admin/approvals/${professionalId}/revoke`, {
+        method: 'POST',
+        body: JSON.stringify({
+          reason: reason.trim(),
+          fields: fields.length ? fields : undefined,
+        }),
+      });
+      startTransition(() => {
+        router.refresh();
+        router.push('/approvals?status=rejected' as never);
+      });
+    } catch (e: unknown) {
+      setError((e as Error).message);
+      setMode('idle');
+    }
+  };
+
+  // Approved pro → allow REVOKE (take offline with a reason).
+  if (currentStatus === 'approved') {
+    return (
+      <div className="card space-y-4 p-6">
+        <h3 className="text-body-large font-bold text-ink">Decision</h3>
+        <div className="rounded-card border border-success/30 bg-success/5 p-4 text-center">
+          <p className="text-small font-bold text-success">✓ This pro is live</p>
+          <p className="mt-1 text-caption text-ink-muted">Visible to customers in search.</p>
+        </div>
+
+        <div className="rounded-card border border-danger/30 bg-danger/5 p-4">
+          <h4 className="mb-2 text-small font-bold text-danger">Revoke approval</h4>
+          <p className="mb-3 text-caption text-ink-muted">
+            Takes the pro offline immediately (hidden from customers). They get a notification with
+            this reason and can re-submit after fixing.
+          </p>
+          <textarea
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            placeholder="Reason for revoking (10+ chars, shown to pro)"
+            maxLength={500}
+            rows={3}
+            className="mb-3 w-full rounded-card border border-border bg-surface px-3 py-2 text-small text-ink placeholder:text-ink-subtle"
+          />
+          <p className="mb-2 text-caption font-semibold text-ink-muted">
+            Which steps to re-fix? (optional)
+          </p>
+          <div className="mb-3 grid grid-cols-2 gap-2">
+            {REJECTABLE_FIELDS.map((f) => {
+              const checked = fields.includes(f.key);
+              return (
+                <label
+                  key={f.key}
+                  className={
+                    'flex cursor-pointer items-center gap-2 rounded-card border px-3 py-2 text-small ' +
+                    (checked
+                      ? 'border-danger bg-danger/10 text-danger'
+                      : 'border-border bg-surface text-ink-muted')
+                  }
+                >
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() =>
+                      setFields((prev) =>
+                        prev.includes(f.key) ? prev.filter((k) => k !== f.key) : [...prev, f.key],
+                      )
+                    }
+                    className="accent-danger"
+                  />
+                  {f.label}
+                </label>
+              );
+            })}
+          </div>
+          <button
+            type="button"
+            onClick={handleRevoke}
+            disabled={mode !== 'idle' || isPending}
+            className="w-full rounded-card bg-danger px-4 py-2.5 text-small font-bold text-white disabled:opacity-50"
+          >
+            {mode === 'revoking' ? 'Revoking…' : 'Revoke & take offline'}
+          </button>
+        </div>
+
+        {error ? (
+          <p className="rounded-card border border-danger bg-danger/10 px-3 py-2 text-small text-danger">
+            {error}
+          </p>
+        ) : null}
+      </div>
+    );
+  }
+
+  // Rejected / draft → nothing to act on here.
   if (currentStatus !== 'submitted_for_review') {
     return (
       <div className="card p-6 text-center text-ink-muted">

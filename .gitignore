@@ -87,3 +87,7 @@ android/build/
 .eas-build2.log
 .last-otp.txt
 
+
+# Pro KYC + profile upload artifacts (PII / runtime — never commit)
+apps/api/uploads/pro-aadhaar/
+apps/api/uploads/pro-photos/

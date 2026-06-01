@@ -90,6 +90,13 @@ export const RejectInputSchema = z.object({
   fields: z.array(z.string()).min(1).max(9),
 });
 
+// Revoke an ALREADY-APPROVED pro — takes them offline (back to rejected)
+// with a reason. fields[] optional (what to re-fix on resubmit).
+export const RevokeInputSchema = z.object({
+  reason: z.string().trim().min(10).max(500),
+  fields: z.array(z.string()).max(9).optional(),
+});
+
 export const PendingApprovalsQuerySchema = z.object({
   status: z
     .enum(['submitted_for_review', 'rejected', 'approved', 'all'])

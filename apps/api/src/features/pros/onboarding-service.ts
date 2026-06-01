@@ -43,6 +43,7 @@ interface ProfileSnapshot {
   panVerified: boolean;
   bankVerified: boolean;
   policeDocStatus: PoliceDocStatus;
+  aadhaarDocStatus: PoliceDocStatus;
   profilePhoto: string | null;
   fullName: string;
   serviceCount: number;
@@ -61,7 +62,11 @@ const STEP_DONE = {
   services: (s: ProfileSnapshot) => s.serviceCount >= 1,
   area: (s: ProfileSnapshot) => s.hasLocation && s.serviceRadiusKm > 0,
   schedule: (s: ProfileSnapshot) => s.scheduleHasAnyAvailable,
-  aadhaar: (s: ProfileSnapshot) => s.aadhaarVerified,
+  // Phase-1 MANUAL Aadhaar: "done" once the pro has uploaded front+back+selfie
+  // (status pending_review) — admin verifies visually at approval time. NOT
+  // gated on Setu auto-verify anymore.
+  aadhaar: (s: ProfileSnapshot) =>
+    s.aadhaarDocStatus === 'pending_review' || s.aadhaarDocStatus === 'approved',
   pan: (s: ProfileSnapshot) => s.panVerified,
   bank: (s: ProfileSnapshot) => s.bankVerified,
   // Police is OPTIONAL during initial submit. Admin can approve a pro
@@ -72,6 +77,9 @@ const STEP_DONE = {
 
 export type WizardStepKey = keyof typeof STEP_DONE;
 
+// Phase-1: only Aadhaar (manual) + core profile are required to submit.
+// PAN + Bank are OPTIONAL (collected later, e.g. at payout) so we can
+// onboard the maximum number of pros without a Setu bottleneck.
 const REQUIRED_STEPS: WizardStepKey[] = [
   'personal',
   'photo',
@@ -79,8 +87,6 @@ const REQUIRED_STEPS: WizardStepKey[] = [
   'area',
   'schedule',
   'aadhaar',
-  'pan',
-  'bank',
 ];
 
 const ALL_STEPS: WizardStepKey[] = [...REQUIRED_STEPS, 'police'];
@@ -101,6 +107,7 @@ async function loadSnapshot(userId: string): Promise<ProfileSnapshot> {
       panVerified: true,
       bankVerified: true,
       policeDocStatus: true,
+      aadhaarDocStatus: true,
       user: { select: { profilePhoto: true, fullName: true } },
       location: { select: { professionalId: true } },
       serviceOfferings: { where: { isActive: true }, select: { id: true } },
@@ -123,6 +130,7 @@ async function loadSnapshot(userId: string): Promise<ProfileSnapshot> {
     panVerified: pro.panVerified,
     bankVerified: pro.bankVerified,
     policeDocStatus: pro.policeDocStatus,
+    aadhaarDocStatus: pro.aadhaarDocStatus,
     profilePhoto: pro.user.profilePhoto,
     fullName: pro.user.fullName,
     serviceCount: pro.serviceOfferings.length,
@@ -205,10 +213,11 @@ export async function getOnboardingStatus(userId: string): Promise<OnboardingSta
 // ─── Guards ───────────────────────────────────────────────────────────
 
 /**
- * Block edits once the pro has hit Submit and is awaiting (or has cleared)
- * admin review. Only `rejected` and `draft` states allow edits. On reject,
- * the pro lands back in draft-like edit mode (status stays `rejected`
- * until they save anything — first save flips back to `draft`).
+ * Editability gate. Allowed: `draft`, `rejected` (wizard flow) AND
+ * `approved` (a live pro updating services / pricing / schedule / photo —
+ * these stay live, status is NOT downgraded since clearRejectionIfPresent
+ * only fires on `rejected`). Blocked: `submitted_for_review` — can't edit
+ * while sitting in the admin queue, would race the reviewer.
  */
 async function assertEditable(userId: string): Promise<{ proId: string; approvalStatus: string }> {
   const pro = await prisma.professional.findUnique({
@@ -218,9 +227,9 @@ async function assertEditable(userId: string): Promise<{ proId: string; approval
   if (!pro) {
     throw new NotFoundError('Professional profile not found for this user');
   }
-  if (pro.approvalStatus === 'submitted_for_review' || pro.approvalStatus === 'approved') {
+  if (pro.approvalStatus === 'submitted_for_review') {
     throw new ConflictError(
-      `Profile is ${pro.approvalStatus} — cannot edit. Contact support to make changes.`,
+      'Profile is under review — cannot edit until the admin decision. Try again shortly.',
     );
   }
   return { proId: pro.id, approvalStatus: pro.approvalStatus };
@@ -430,6 +439,49 @@ export async function savePoliceDoc(
   });
 
   return { ok: true, status: 'pending_review' };
+}
+
+// ─── Save: Aadhaar document photos (Phase-1 manual) ───────────────────
+
+export type AadhaarSlot = 'front' | 'back' | 'selfie';
+
+/**
+ * Phase-1 manual Aadhaar: store the uploaded photo for one slot. Once all
+ * three (front + back + selfie) are present, flip aadhaarDocStatus to
+ * pending_review so the step counts as done and the admin can match them.
+ * Mirrors savePoliceDoc.
+ */
+export async function saveAadhaarDoc(
+  userId: string,
+  slot: AadhaarSlot,
+  url: string,
+  autoOk: boolean | null = null,
+): Promise<{ ok: true; status: PoliceDocStatus }> {
+  const { proId, approvalStatus } = await assertEditable(userId);
+
+  const field =
+    slot === 'front' ? 'aadhaarFrontUrl' : slot === 'back' ? 'aadhaarBackUrl' : 'aadhaarSelfieUrl';
+  const okField =
+    slot === 'front' ? 'aadhaarFrontOk' : slot === 'back' ? 'aadhaarBackOk' : 'aadhaarSelfieOk';
+
+  const status = await prisma.$transaction(async (tx) => {
+    const updated = await tx.professional.update({
+      where: { id: proId },
+      data: { [field]: url, [okField]: autoOk },
+      select: { aadhaarFrontUrl: true, aadhaarBackUrl: true, aadhaarSelfieUrl: true },
+    });
+    const allPresent =
+      !!updated.aadhaarFrontUrl && !!updated.aadhaarBackUrl && !!updated.aadhaarSelfieUrl;
+    const next: PoliceDocStatus = allPresent ? 'pending_review' : 'not_uploaded';
+    await tx.professional.update({
+      where: { id: proId },
+      data: { aadhaarDocStatus: next, kycUpdatedAt: new Date() },
+    });
+    await clearRejectionIfPresent(tx, proId, approvalStatus);
+    return next;
+  });
+
+  return { ok: true, status };
 }
 
 // ─── Submit ───────────────────────────────────────────────────────────

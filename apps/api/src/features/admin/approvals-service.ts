@@ -44,7 +44,7 @@ export async function listPendingApprovals(args: {
 }): Promise<{ rows: PendingProRow[]; total: number }> {
   // Prisma's enum-array filter wants a mutable array, not `as const`.
   // Type the where explicitly so TS unifies the branches into one shape.
-  const statuses: Array<'submitted_for_review' | 'rejected' | 'approved'> = [
+  const statuses: ('submitted_for_review' | 'rejected' | 'approved')[] = [
     'submitted_for_review',
     'rejected',
     'approved',
@@ -142,6 +142,13 @@ export async function getApprovalReviewDetail(professionalId: string) {
       aadhaarLastFour: true,
       aadhaarDob: true,
       aadhaarPhotoUrl: true,
+      aadhaarFrontUrl: true,
+      aadhaarBackUrl: true,
+      aadhaarSelfieUrl: true,
+      aadhaarDocStatus: true,
+      aadhaarFrontOk: true,
+      aadhaarBackOk: true,
+      aadhaarSelfieOk: true,
       panVerified: true,
       panNumber: true,
       panFullName: true,
@@ -202,6 +209,7 @@ export async function approveProfessional(args: {
     select: {
       id: true,
       approvalStatus: true,
+      aadhaarDocStatus: true,
       userId: true,
       user: { select: { fullName: true } },
     },
@@ -224,6 +232,11 @@ export async function approveProfessional(args: {
       approvedByUserId: args.adminUserId,
       rejectionReason: null,
       rejectionFields: [],
+      // Phase-1 manual Aadhaar: approving the pro IS the human verification,
+      // so reflect it on the KYC chips. Only flips if docs were uploaded.
+      ...(pro.aadhaarDocStatus === 'pending_review'
+        ? { aadhaarVerified: true, aadhaarDocStatus: 'approved' as const }
+        : {}),
     },
   });
 
@@ -259,6 +272,88 @@ export async function approveProfessional(args: {
   });
 
   return { ok: true, approvedAt: approvedAt.toISOString() };
+}
+
+/**
+ * Revoke an ALREADY-APPROVED pro — takes them offline immediately. Sets
+ * approval_status back to 'rejected' (the customer-visibility gate is
+ * approval_status === 'approved', so this hides them from /pros/nearby),
+ * records the reason, resets the manual-Aadhaar verification so it must
+ * be re-reviewed on resubmit, and notifies the pro. They can edit +
+ * resubmit through the normal rejected flow.
+ */
+export async function revokeProfessional(args: {
+  professionalId: string;
+  adminUserId: string;
+  reason: string;
+  fields?: string[] | undefined;
+  ip?: string | null | undefined;
+  userAgent?: string | null | undefined;
+}): Promise<{ ok: true }> {
+  const pro = await prisma.professional.findUnique({
+    where: { id: args.professionalId },
+    select: {
+      id: true,
+      approvalStatus: true,
+      aadhaarDocStatus: true,
+      userId: true,
+      user: { select: { fullName: true } },
+    },
+  });
+  if (!pro) {
+    throw new NotFoundError('Professional not found');
+  }
+  if (pro.approvalStatus !== 'approved') {
+    throw new ConflictError(`Cannot revoke — pro is ${pro.approvalStatus}, not approved`);
+  }
+
+  const fields = args.fields ?? [];
+  await prisma.professional.update({
+    where: { id: pro.id },
+    data: {
+      approvalStatus: 'rejected',
+      rejectionReason: args.reason,
+      rejectionFields: fields,
+      approvedAt: null,
+      approvedByUserId: null,
+      // Approval WAS the human Aadhaar verification — undo it so a
+      // resubmit goes back through manual review instead of staying "approved".
+      ...(pro.aadhaarDocStatus === 'approved'
+        ? { aadhaarVerified: false, aadhaarDocStatus: 'pending_review' as const }
+        : {}),
+    },
+  });
+
+  await recordAudit({
+    actorId: args.adminUserId,
+    actorRole: 'admin',
+    action: 'update',
+    entity: 'professional',
+    entityId: pro.id,
+    before: { approvalStatus: 'approved' },
+    after: {
+      approvalStatus: 'rejected',
+      revoked: true,
+      rejectionReason: args.reason,
+      rejectionFields: fields,
+      userId: pro.userId,
+    },
+    ipAddress: args.ip ?? null,
+    userAgent: args.userAgent ?? null,
+  });
+
+  // Reuse the rejection push — pro sees "Application needs fixes" with the
+  // reason + fields, deep-links to the onboarding welcome screen.
+  await notifyProRejected({
+    proUserId: pro.userId,
+    proName: pro.user.fullName,
+    reason: args.reason,
+    fields,
+  }).catch(() => {
+    // Non-fatal — revoke already persisted
+  });
+
+  return { ok: true };
 }
 
 export async function rejectProfessional(args: {

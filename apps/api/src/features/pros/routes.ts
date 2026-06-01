@@ -25,11 +25,13 @@ import {
   savePersonalInfo,
   savePhoto,
   savePoliceDoc,
+  saveAadhaarDoc,
   saveSchedule,
   saveServices,
   submitForReview,
 } from './onboarding-service.js';
 import { saveUpload } from '../admin/uploads-service.js';
+import { checkAadhaarSlot } from './aadhaar-vision.js';
 import { getTrustSnapshot } from '../trust-score/service.js';
 
 const pros = new Hono<AuthContext>();
@@ -197,6 +199,38 @@ pros.post('/me/onboarding/police-doc', authenticate, authorize('professional'), 
   const upload = await saveUpload({ file, folder: 'pro-police-docs', publicBaseUrl: origin });
   const result = await savePoliceDoc(user.sub, upload.url);
   return success(c, result);
+});
+
+/**
+ * Phase-1 manual Aadhaar — upload one of front | back | selfie. Multipart
+ * with fields `file` (image) + `slot`. Stores via the shared uploads-service
+ * and flips aadhaarDocStatus to pending_review once all three are present.
+ */
+pros.post('/me/onboarding/aadhaar-doc', authenticate, authorize('professional'), async (c) => {
+  const user = c.get('user');
+  const formData = await c.req.formData().catch(() => null);
+  const file = formData?.get('file');
+  const slot = formData?.get('slot');
+  if (!file || !(file instanceof File)) {
+    throw new DomainError(
+      ErrorCode.SL_900_VALIDATION_ERROR,
+      'Missing file in form data (field "file")',
+    );
+  }
+  if (slot !== 'front' && slot !== 'back' && slot !== 'selfie') {
+    throw new DomainError(
+      ErrorCode.SL_900_VALIDATION_ERROR,
+      'Field "slot" must be one of: front, back, selfie',
+    );
+  }
+  const origin = new URL(c.req.url).origin;
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const [upload, autoOk] = await Promise.all([
+    saveUpload({ file, folder: 'pro-aadhaar', publicBaseUrl: origin }),
+    checkAadhaarSlot(bytes, slot), // SOFT — never throws, never blocks
+  ]);
+  const result = await saveAadhaarDoc(user.sub, slot, upload.url, autoOk);
+  return success(c, { ...result, autoOk });
 });
 
 pros.post('/me/onboarding/submit', authenticate, authorize('professional'), async (c) => {

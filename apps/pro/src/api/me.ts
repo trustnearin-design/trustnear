@@ -37,8 +37,10 @@ export interface MyProfile {
   trustScore: string;
   trustBadge: TrustBadge;
   availabilityStatus: ProAvailability;
+  approvalStatus: 'draft' | 'submitted_for_review' | 'approved' | 'rejected';
   aadhaarVerified: boolean;
   faceVerified: boolean;
+  panVerified: boolean;
   bankVerified: boolean;
   policeVerified: boolean;
   introVideoUrl: string | null;

@@ -14,6 +14,9 @@ export default function AppStackLayout() {
       <Stack.Screen name="kyc/aadhaar" />
       <Stack.Screen name="kyc/pan" />
       <Stack.Screen name="kyc/bank" />
+      {/* Post-approval profile editors — services / schedule */}
+      <Stack.Screen name="edit/services" />
+      <Stack.Screen name="edit/schedule" />
     </Stack>
   );
 }

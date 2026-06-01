@@ -41,6 +41,7 @@ export async function getMyProfile(userId: string) {
       rejectionFields: true,
       aadhaarVerified: true,
       faceVerified: true,
+      panVerified: true,
       bankVerified: true,
       policeVerified: true,
       policeDocStatus: true,

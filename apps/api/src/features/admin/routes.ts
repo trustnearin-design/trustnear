@@ -22,11 +22,13 @@ import {
   getApprovalReviewDetail,
   listPendingApprovals,
   rejectProfessional,
+  revokeProfessional,
 } from './approvals-service.js';
 import {
   ApproveInputSchema,
   PendingApprovalsQuerySchema,
   RejectInputSchema,
+  RevokeInputSchema,
 } from '../pros/onboarding-schemas.js';
 import {
   listAllCategories,
@@ -231,6 +233,26 @@ admin.post('/pros/:id/reject', validator('json', RejectInputSchema), async (c) =
   const adminUser = c.get('user');
   const { reason, fields } = c.req.valid('json');
   const result = await rejectProfessional({
+    professionalId: c.req.param('id'),
+    adminUserId: adminUser.sub,
+    reason,
+    fields,
+    ip: c.req.header('x-forwarded-for')?.split(',')[0]?.trim() ?? null,
+    userAgent: c.req.header('user-agent') ?? null,
+  });
+  return success(c, result);
+});
+
+/**
+ * POST /admin/pros/:id/revoke
+ * Take an already-APPROVED pro offline → approval_status back to rejected
+ * with a reason. Removes them from /pros/nearby immediately and notifies
+ * the pro, who can edit + resubmit. Audit-logged.
+ */
+admin.post('/pros/:id/revoke', validator('json', RevokeInputSchema), async (c) => {
+  const adminUser = c.get('user');
+  const { reason, fields } = c.req.valid('json');
+  const result = await revokeProfessional({
     professionalId: c.req.param('id'),
     adminUserId: adminUser.sub,
     reason,

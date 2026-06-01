@@ -1,10 +1,20 @@
-import { View, Text, Pressable, ActivityIndicator, ScrollView, RefreshControl } from 'react-native';
+import {
+  View,
+  Text,
+  Pressable,
+  ActivityIndicator,
+  ScrollView,
+  RefreshControl,
+  Alert,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
+import * as ImagePicker from 'expo-image-picker';
 import { useAuthStore } from '../../../src/stores/auth';
 import { useLogout } from '../../../src/api/auth';
 import { useMyProfile, type MyProfile } from '../../../src/api/me';
+import { useUploadPhoto } from '../../../src/api/onboarding';
 import { formatIndianPhone, formatRupees } from '../../../src/lib/format';
 import { Avatar } from '../../../src/components/Avatar';
 import { colors } from '../../../src/theme/colors';
@@ -12,18 +22,79 @@ import { BrandHero } from '../../../src/components/ui';
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
+// Profile status chip — reflects approval state, NOT a raw all-KYC-verified
+// check (an approved pro is live even if PAN/Bank/Police are still pending).
+function statusChip(
+  approvalStatus: MyProfile['approvalStatus'],
+  trustBadge: string,
+): {
+  label: string;
+  icon: React.ComponentProps<typeof Ionicons>['name'];
+  tone: 'success' | 'warning' | 'danger';
+} {
+  switch (approvalStatus) {
+    case 'approved': {
+      const badge = trustBadge && trustBadge !== 'none' ? trustBadge : 'verified';
+      return {
+        label: `${badge.charAt(0).toUpperCase()}${badge.slice(1)} verified`,
+        icon: 'shield-checkmark',
+        tone: 'success',
+      };
+    }
+    case 'submitted_for_review':
+      return { label: 'Under review', icon: 'time', tone: 'warning' };
+    case 'rejected':
+      return { label: 'Action needed', icon: 'alert-circle', tone: 'danger' };
+    default:
+      return { label: 'Profile incomplete', icon: 'alert-circle', tone: 'warning' };
+  }
+}
+
+const TONE_BG: Record<'success' | 'warning' | 'danger', string> = {
+  success: 'bg-success/10',
+  warning: 'bg-warning/10',
+  danger: 'bg-danger/10',
+};
+const TONE_FG: Record<'success' | 'warning' | 'danger', string> = {
+  success: colors.success,
+  warning: colors.warning,
+  danger: colors.danger,
+};
+
 export default function ProfileScreen() {
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
   const profile = useMyProfile();
   const logout = useLogout();
+  const uploadPhoto = useUploadPhoto();
 
-  const allVerified =
-    !!profile.data &&
-    profile.data.aadhaarVerified &&
-    profile.data.faceVerified &&
-    profile.data.bankVerified &&
-    profile.data.policeVerified;
+  const chip = profile.data
+    ? statusChip(profile.data.approvalStatus, profile.data.trustBadge)
+    : null;
+
+  // Tap avatar → pick + upload a new profile photo (works for approved pros now).
+  const changePhoto = async () => {
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) {
+      Alert.alert('Permission needed', 'Gallery access chahiye photo badalne ke liye.');
+      return;
+    }
+    const res = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.7,
+    });
+    if (res.canceled || !res.assets[0]) return;
+    const asset = res.assets[0];
+    uploadPhoto.mutate(
+      { uri: asset.uri, mime: asset.mimeType ?? 'image/jpeg' },
+      {
+        onSuccess: () => void profile.refetch(),
+        onError: (e: Error) => Alert.alert('Upload failed', e.message),
+      },
+    );
+  };
 
   return (
     <View className="flex-1 bg-surface-muted">
@@ -80,35 +151,35 @@ export default function ProfileScreen() {
           }}
         >
           <View className="flex-row items-center">
-            <Avatar
-              fullName={user?.fullName ?? 'Pro'}
-              photoUrl={profile.data?.user.profilePhoto ?? undefined}
-              size={64}
-            />
+            <Pressable onPress={() => void changePhoto()} hitSlop={6}>
+              <Avatar
+                fullName={user?.fullName ?? 'Pro'}
+                photoUrl={profile.data?.user.profilePhoto ?? undefined}
+                size={64}
+              />
+              <View className="absolute -bottom-1 -right-1 h-6 w-6 items-center justify-center rounded-full border-2 border-surface bg-brand">
+                {uploadPhoto.isPending ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Ionicons name="camera" size={12} color="#fff" />
+                )}
+              </View>
+            </Pressable>
             <View className="ml-3 flex-1">
               <Text className="text-[18px] font-bold text-ink">{user?.fullName ?? 'Pro'}</Text>
               <Text className="text-[12px] text-ink-muted">
                 {user?.phone ? formatIndianPhone(user.phone) : ''}
               </Text>
-              {profile.data ? (
+              {chip ? (
                 <View
-                  className={`mt-1.5 self-start flex-row items-center rounded-pill px-2 py-0.5 ${
-                    allVerified ? 'bg-success/10' : 'bg-warning/10'
-                  }`}
+                  className={`mt-1.5 self-start flex-row items-center rounded-pill px-2 py-0.5 ${TONE_BG[chip.tone]}`}
                 >
-                  <Ionicons
-                    name={allVerified ? 'shield-checkmark' : 'alert-circle'}
-                    size={10}
-                    color={allVerified ? colors.success : colors.warning}
-                  />
+                  <Ionicons name={chip.icon} size={10} color={TONE_FG[chip.tone]} />
                   <Text
-                    className={`ml-1 text-[10px] font-bold ${
-                      allVerified ? 'text-success' : 'text-warning'
-                    }`}
+                    className="ml-1 text-[10px] font-bold"
+                    style={{ color: TONE_FG[chip.tone] }}
                   >
-                    {allVerified
-                      ? `${profile.data.trustBadge.charAt(0).toUpperCase()}${profile.data.trustBadge.slice(1)} verified`
-                      : 'KYC pending'}
+                    {chip.label}
                   </Text>
                 </View>
               ) : null}
@@ -141,11 +212,7 @@ export default function ProfileScreen() {
             verified={profile.data?.aadhaarVerified ?? false}
           />
           <Divider />
-          <KycRow
-            icon="person-circle"
-            label="Face match"
-            verified={profile.data?.faceVerified ?? false}
-          />
+          <KycRow icon="document-text" label="PAN" verified={profile.data?.panVerified ?? false} />
           <Divider />
           <KycRow icon="card" label="Bank account" verified={profile.data?.bankVerified ?? false} />
           <Divider />
@@ -160,10 +227,14 @@ export default function ProfileScreen() {
           </View>
         </Pressable>
 
-        <SectionTitle>Services offered</SectionTitle>
+        <SectionTitle onEdit={() => router.push('/(app)/edit/services')}>
+          Services offered
+        </SectionTitle>
         <OfferingsList profile={profile.data} />
 
-        <SectionTitle>Weekly schedule</SectionTitle>
+        <SectionTitle onEdit={() => router.push('/(app)/edit/schedule')}>
+          Weekly schedule
+        </SectionTitle>
         <ScheduleList profile={profile.data} />
 
         <SectionTitle>Account</SectionTitle>
@@ -245,12 +316,18 @@ function MetricCell({ label, value }: { label: string; value: string }) {
   );
 }
 
-function SectionTitle({ children }: { children: string }) {
+function SectionTitle({ children, onEdit }: { children: string; onEdit?: () => void }) {
   return (
-    <View className="mt-6 px-5">
+    <View className="mt-6 flex-row items-center justify-between px-5">
       <Text className="text-[11px] font-bold uppercase tracking-[2px] text-ink-subtle">
         {children}
       </Text>
+      {onEdit ? (
+        <Pressable onPress={onEdit} hitSlop={8} className="flex-row items-center">
+          <Ionicons name="create-outline" size={14} color={colors.brand.DEFAULT} />
+          <Text className="ml-1 text-[12px] font-bold text-brand">Edit</Text>
+        </Pressable>
+      ) : null}
     </View>
   );
 }

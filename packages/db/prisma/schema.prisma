@@ -308,6 +308,18 @@ model Professional {
   aadhaarFullName          String?           @map("aadhaar_full_name")
   aadhaarDob               DateTime?         @map("aadhaar_dob") @db.Date
   aadhaarPhotoUrl          String?           @map("aadhaar_photo_url")
+  // Phase-1 MANUAL Aadhaar — pro uploads front+back+selfie, admin visually
+  // matches & approves (Setu DigiLocker auto-verify deferred to Phase-2).
+  // Reuses PoliceDocStatus enum (identical lifecycle shape).
+  aadhaarFrontUrl          String?           @map("aadhaar_front_url")
+  aadhaarBackUrl           String?           @map("aadhaar_back_url")
+  aadhaarSelfieUrl         String?           @map("aadhaar_selfie_url")
+  aadhaarDocStatus         PoliceDocStatus   @default(not_uploaded) @map("aadhaar_doc_status")
+  // Rekognition SOFT auto-check per slot (null = unchecked/unavailable,
+  // true = looked valid, false = flagged for admin). Never blocks upload.
+  aadhaarFrontOk           Boolean?          @map("aadhaar_front_ok")
+  aadhaarBackOk            Boolean?          @map("aadhaar_back_ok")
+  aadhaarSelfieOk          Boolean?          @map("aadhaar_selfie_ok")
   bankAccountLastFour      String?           @map("bank_account_last_four") @db.VarChar(4)
   bankAccountHolderName    String?           @map("bank_account_holder_name")
   digilockerRequestId      String?           @map("digilocker_request_id") @db.VarChar(50)

@@ -32,7 +32,7 @@ const STEP_META: Record<
   area: { label: 'Working area', route: '/(onboarding)/area', icon: 'location-outline' },
   schedule: { label: 'Schedule', route: '/(onboarding)/schedule', icon: 'calendar-outline' },
   aadhaar: {
-    label: 'Aadhaar (DigiLocker)',
+    label: 'Aadhaar (photos)',
     route: '/(onboarding)/aadhaar',
     icon: 'shield-checkmark-outline',
   },
@@ -54,6 +54,11 @@ export default function ReviewScreen() {
   const status = onboarding.data;
   const canSubmit = status?.canSubmit ?? false;
   const requiredRemaining = status?.progress.requiredRemaining ?? [];
+  // Steps the admin flagged on rejection — highlight them so the pro knows
+  // exactly what to re-do before resubmitting.
+  const flagged = new Set(
+    status?.approvalStatus === 'rejected' ? (status?.rejectionFields ?? []) : [],
+  );
 
   const onSubmit = () => {
     if (!canSubmit) {
@@ -217,6 +222,7 @@ export default function ReviewScreen() {
           const step = status?.steps[key];
           const done = step?.done ?? false;
           const required = step?.required ?? false;
+          const needsFix = flagged.has(key);
           return (
             <Pressable
               key={key}
@@ -227,10 +233,14 @@ export default function ReviewScreen() {
                 gap: 12,
                 paddingVertical: 14,
                 paddingHorizontal: 14,
-                backgroundColor: colors.surface.DEFAULT,
+                backgroundColor: needsFix ? '#FDECEA' : colors.surface.DEFAULT,
                 borderRadius: 14,
-                borderWidth: 1,
-                borderColor: done ? colors.success : colors.border.DEFAULT,
+                borderWidth: needsFix ? 1.5 : 1,
+                borderColor: needsFix
+                  ? colors.danger
+                  : done
+                    ? colors.success
+                    : colors.border.DEFAULT,
                 marginBottom: 8,
               }}
             >
@@ -241,13 +251,17 @@ export default function ReviewScreen() {
                   borderRadius: 18,
                   alignItems: 'center',
                   justifyContent: 'center',
-                  backgroundColor: done ? colors.success : colors.brand[50],
+                  backgroundColor: needsFix
+                    ? colors.danger
+                    : done
+                      ? colors.success
+                      : colors.brand[50],
                 }}
               >
                 <Ionicons
-                  name={done ? 'checkmark' : meta.icon}
+                  name={needsFix ? 'alert' : done ? 'checkmark' : meta.icon}
                   size={18}
-                  color={done ? '#fff' : colors.brand[700]}
+                  color={needsFix || done ? '#fff' : colors.brand[700]}
                 />
               </View>
               <View style={{ flex: 1 }}>
@@ -263,12 +277,18 @@ export default function ReviewScreen() {
                 <Text
                   style={{
                     fontSize: 12,
-                    color: done ? colors.success : colors.ink.subtle,
+                    color: needsFix ? colors.danger : done ? colors.success : colors.ink.subtle,
                     marginTop: 2,
                     fontWeight: '600',
                   }}
                 >
-                  {done ? 'Completed' : required ? 'Tap to complete' : 'Tap to add (optional)'}
+                  {needsFix
+                    ? 'Admin ne ye fix karne ko kaha — tap karein'
+                    : done
+                      ? 'Completed'
+                      : required
+                        ? 'Tap to complete'
+                        : 'Tap to add (optional)'}
                 </Text>
               </View>
               <Ionicons name="chevron-forward" size={18} color={colors.ink.subtle} />
