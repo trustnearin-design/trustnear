@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { ScrollView, View, Text, Pressable, ActivityIndicator, RefreshControl } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
@@ -11,34 +11,39 @@ import {
   type CategoryTreeParent,
 } from '../../../src/api/discovery';
 import { BannerSlider } from '../../../src/components/BannerSlider';
+import { CategoryFeed } from '../../../src/components/CategoryFeed';
+import { synthDeal } from '../../../src/lib/pricing';
 import { colors } from '../../../src/theme/colors';
 import {
   ExpertCircle,
-  SectionHeader,
-  LiveDot,
   Gradient,
-  ServiceCard,
-  FilterChipsRow,
-  PromoBanner,
-  PhotoCategoryTile,
-  CategoryServicesStrip,
   MascotImage,
+  SectionTitle,
+  CouponStrip,
+  TrustStrip,
+  DealCardGrid,
+  TwoRowCategorySlider,
+  CircleLabelGrid,
+  PromoBanner,
+  ParentCircleRail,
+  ParentTabsBar,
 } from '../../../src/components/ui';
 
 /**
- * D3 customer home v2 — Plum hero with greeting + location, floating
- * search pill, "Top Verified Pros" circular-avatar strip (signature
- * element), 2×2 rich category tiles, promo banner, live-area ribbon,
- * and customer testimonials.
- *
- * Single ScrollView with sectioned content; sections defer to their
- * own loading/error UIs so a slow leaf doesn't block the hero render.
+ * Customer home v4 — Myntra-class. Sticky top (plum hero → search → coupon →
+ * circle rail → pinned tab strip); body swaps wholesale per selected parent
+ * tab. "All" = a dense, image-driven mixed feed (deal cards, 2-row category
+ * sliders, labelled grids, trust + promo strips); a parent tab = that
+ * category's CategoryFeed.
  */
 export default function HomeScreen() {
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
   const tree = useCategoryTree();
   const featured = useFeaturedPros(10);
+  const insets = useSafeAreaInsets();
+
+  const [selectedParent, setSelectedParent] = useState<string | null>(null);
 
   const onRefresh = () => {
     void tree.refetch();
@@ -48,20 +53,31 @@ export default function HomeScreen() {
   const firstName = user?.fullName?.split(' ')[0] ?? '';
   const greeting = useGreeting();
   const parents = tree.data?.tree ?? [];
+  const activeParent = selectedParent
+    ? (parents.find((p) => p.slug === selectedParent) ?? null)
+    : null;
 
-  // Push content above the bottom tab bar (64) + Android gesture nav inset
-  // + breathing room. Without this the last section (Trust narrative) gets
-  // clipped under the tab bar on devices with edge-to-edge enabled.
-  const insets = useSafeAreaInsets();
   const bottomPad = 64 + insets.bottom + 32;
+
+  const openCategory = (slug: string) =>
+    router.push({ pathname: '/(app)/category/[slug]', params: { slug } });
+
+  const tabItems = parents.map((p) => ({ slug: p.slug, name: p.name }));
+  const circleItems = parents.map((p) => ({
+    slug: p.slug,
+    name: p.name,
+    heroImageUrl: p.heroImageUrl,
+  }));
 
   return (
     <View className="flex-1" style={{ backgroundColor: colors.surface.muted }}>
       <StatusBar style="light" />
+      <View style={{ height: insets.top, backgroundColor: colors.brand[800] }} />
       <ScrollView
         className="flex-1"
         contentContainerStyle={{ paddingBottom: bottomPad }}
         showsVerticalScrollIndicator={false}
+        stickyHeaderIndices={[1]}
         refreshControl={
           <RefreshControl
             refreshing={
@@ -72,15 +88,14 @@ export default function HomeScreen() {
           />
         }
       >
-        {/* ── Plum gradient hero ───────────────────────────────── */}
+        {/* ── [0] Hero: header + search + coupon + circle rail ─────── */}
         <View>
           <Gradient
             colors={colors.gradient.hero}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
-            style={{ paddingBottom: 44 }}
+            style={{ paddingBottom: 38, paddingTop: 8 }}
           >
-            {/* Coral glow top-right */}
             <View
               style={{
                 position: 'absolute',
@@ -92,275 +107,304 @@ export default function HomeScreen() {
                 backgroundColor: 'rgba(255,122,92,0.18)',
               }}
             />
-            {/* Butter glow bottom-left */}
-            <View
-              style={{
-                position: 'absolute',
-                bottom: -40,
-                left: -40,
-                width: 180,
-                height: 180,
-                borderRadius: 90,
-                backgroundColor: 'rgba(245,199,106,0.08)',
-              }}
+            <HeaderBar
+              greeting={greeting}
+              firstName={firstName}
+              onLocationPress={() => router.push('/(app)/(tabs)/profile')}
+              onBellPress={() => router.push('/(app)/(tabs)/bookings')}
+              onAvatarPress={() => router.push('/(app)/(tabs)/profile')}
+              onGridPress={() =>
+                router.push({
+                  pathname: '/(app)/(tabs)/categories',
+                  params: selectedParent ? { parent: selectedParent } : {},
+                })
+              }
             />
-            <SafeAreaView edges={['top']}>
-              <HeaderBar
-                greeting={greeting}
-                firstName={firstName}
-                onLocationPress={() => router.push('/(app)/(tabs)/profile')}
-                onBellPress={() => router.push('/(app)/(tabs)/bookings')}
-                onAvatarPress={() => router.push('/(app)/(tabs)/profile')}
-              />
-            </SafeAreaView>
           </Gradient>
 
-          {/* Floating search pill, straddles the hero boundary */}
+          {/* Floating search pill straddling the hero boundary */}
           <View style={{ paddingHorizontal: 20, marginTop: -26 }}>
-            <SearchPill onPress={() => router.push('/(app)/search')} />
+            <SearchPill
+              onPress={() => router.push('/(app)/search')}
+              onMicPress={() => router.push('/(app)/search?voice=1')}
+            />
+          </View>
+
+          {/* Coupon ticket */}
+          <View style={{ marginTop: 16 }}>
+            <CouponStrip
+              offer="FLAT 20% OFF"
+              code="FIRST20"
+              caption="on your first booking"
+              onPress={() => router.push('/(app)/search')}
+            />
+          </View>
+
+          {/* Parent circle rail — scrolls away; the tab strip below pins. */}
+          <View style={{ marginTop: 18 }}>
+            <ParentCircleRail
+              items={circleItems}
+              selected={selectedParent}
+              onSelect={setSelectedParent}
+            />
           </View>
         </View>
 
-        {/* ── Top Verified Pros (round avatars) ─────────────────── */}
-        <View className="mt-7 px-5">
-          <SectionHeader
-            eyebrow="VERIFIED · NEAR YOU"
-            title="Top Experts"
-            ctaLabel="See all"
-            onCtaPress={() => router.push('/(app)/(tabs)/categories')}
-          />
+        {/* ── [1] Sticky parent tab strip ──────────────────────────── */}
+        <ParentTabsBar items={tabItems} selected={selectedParent} onSelect={setSelectedParent} />
+
+        {/* ── [2] Feed body ────────────────────────────────────────── */}
+        <View key={selectedParent ?? 'all'}>
+          {tree.isPending ? (
+            <View className="items-center py-16">
+              <ActivityIndicator color={colors.brand.DEFAULT} />
+            </View>
+          ) : activeParent ? (
+            <CategoryFeed parent={activeParent} onOpenCategory={openCategory} />
+          ) : (
+            <AllFeed
+              router={router}
+              parents={parents}
+              featured={featured}
+              onOpenCategory={openCategory}
+            />
+          )}
         </View>
-        <FeaturedProsStrip
-          loading={featured.isPending}
-          error={featured.isError}
-          pros={featured.data?.pros ?? []}
-          onProPress={(id) => router.push({ pathname: '/(app)/pro/[id]', params: { id } })}
-        />
-
-        {/* ── Promo banner #1 — Monsoon special ─────────────────── */}
-        <View style={{ marginTop: 24 }}>
-          <PromoBanner
-            imageUrl="https://images.unsplash.com/photo-1584820927498-cfe5211fd8bf?w=1200&q=80&auto=format&fit=crop"
-            eyebrow="Monsoon special"
-            title={'Deep clean your home\nbefore the festivities'}
-            subtitle="Trained pros, ₹100 off your first booking"
-            ctaLabel="Book now"
-            tint="plum"
-            onPress={() => goToCategory(router, 'home-care')}
-          />
-        </View>
-
-        {/* ── "Most booked" with filter chips ─────────────────── */}
-        <View className="mt-7 px-5">
-          <SectionHeader
-            eyebrow="TRENDING · NEAR YOU"
-            title="Most booked services"
-            ctaLabel="See all"
-            onCtaPress={() => router.push('/(app)/(tabs)/categories')}
-          />
-        </View>
-        <TrendingServicesStrip
-          parents={parents}
-          loading={tree.isPending}
-          onCardPress={(slug) =>
-            router.push({ pathname: '/(app)/category/[slug]', params: { slug } })
-          }
-        />
-
-        {/* ── Per-category slider: Home Cleaning ────────────────── */}
-        <View style={{ marginTop: 28 }}>
-          <CategoryServicesStrip
-            eyebrow="HOME · ESSENTIALS"
-            title="Home Cleaning"
-            ctaLabel="See all"
-            onCtaPress={() => goToCategory(router, 'home-care')}
-            services={childrenOf(parents, 'home-care')}
-            badgeForIndex={(i) => (i === 0 ? 'Bestseller' : undefined)}
-            onCardPress={(slug) =>
-              router.push({ pathname: '/(app)/category/[slug]', params: { slug } })
-            }
-          />
-        </View>
-
-        {/* ── Promo banner #2 — Salon ───────────────────────────── */}
-        <View style={{ marginTop: 28 }}>
-          <PromoBanner
-            imageUrl="https://images.unsplash.com/photo-1560066984-138dadb4c035?w=1200&q=80&auto=format&fit=crop"
-            eyebrow="India's first"
-            title={'Full Body Korean\nSpa Ritual'}
-            subtitle="Sensory healing + 8 free gifts"
-            ctaLabel="Book now"
-            tint="coral"
-            onPress={() => goToCategory(router, 'beauty-wellness')}
-          />
-        </View>
-
-        {/* ── Per-category slider: Salon & Beauty ───────────────── */}
-        <View style={{ marginTop: 24 }}>
-          <CategoryServicesStrip
-            eyebrow="AT YOUR DOORSTEP"
-            title="Salon at Home"
-            ctaLabel="See all"
-            onCtaPress={() => goToCategory(router, 'beauty-wellness')}
-            services={childrenOf(parents, 'beauty-wellness')}
-            badgeForIndex={(i) => (i === 0 ? 'Trending' : undefined)}
-            onCardPress={(slug) =>
-              router.push({ pathname: '/(app)/category/[slug]', params: { slug } })
-            }
-          />
-        </View>
-
-        {/* ── Per-category slider: Appliance Repair ─────────────── */}
-        <View style={{ marginTop: 28 }}>
-          <CategoryServicesStrip
-            eyebrow="SAME DAY VISITS"
-            title="Appliance Repair"
-            ctaLabel="See all"
-            onCtaPress={() => goToCategory(router, 'appliances')}
-            services={childrenOf(parents, 'appliances')}
-            badgeForIndex={(i) => (i === 0 ? 'In 60 mins' : undefined)}
-            onCardPress={(slug) =>
-              router.push({ pathname: '/(app)/category/[slug]', params: { slug } })
-            }
-          />
-        </View>
-
-        {/* ── Photo category mosaic ─────────────────────────────── */}
-        <View className="mt-8 px-5">
-          <SectionHeader eyebrow="EXPLORE" title="All categories" />
-        </View>
-        {tree.isPending ? (
-          <View className="items-center py-10">
-            <ActivityIndicator color={colors.brand.DEFAULT} />
-          </View>
-        ) : tree.isError ? (
-          <ErrorBlock onRetry={() => void tree.refetch()} />
-        ) : (
-          <CategoryGrid
-            parents={parents}
-            onPress={(slug) =>
-              router.push({ pathname: '/(app)/category/[slug]', params: { slug } })
-            }
-          />
-        )}
-
-        {/* ── Promo banner #3 — Daily help ──────────────────────── */}
-        <View style={{ marginTop: 28 }}>
-          <PromoBanner
-            imageUrl="https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=1200&q=80&auto=format&fit=crop"
-            eyebrow="Daily essentials"
-            title={'Hourly maid, cook,\noffice boy near you'}
-            subtitle="Background-verified, pay by the hour"
-            ctaLabel="Book hourly"
-            tint="plum"
-            onPress={() => goToCategory(router, 'daily-help')}
-          />
-        </View>
-
-        {/* ── Per-category slider: Daily Help ───────────────────── */}
-        <View style={{ marginTop: 24 }}>
-          <CategoryServicesStrip
-            eyebrow="HOURLY · VERIFIED"
-            title="Daily Help"
-            ctaLabel="See all"
-            onCtaPress={() => goToCategory(router, 'daily-help')}
-            services={childrenOf(parents, 'daily-help')}
-            badgeForIndex={(i) => (i === 0 ? 'Top pick' : undefined)}
-            onCardPress={(slug) =>
-              router.push({ pathname: '/(app)/category/[slug]', params: { slug } })
-            }
-          />
-        </View>
-
-        {/* ── Per-category slider: Care Services ────────────────── */}
-        <View style={{ marginTop: 28 }}>
-          <CategoryServicesStrip
-            eyebrow="TRUSTED · BACKGROUND-CHECKED"
-            title="Care for your loved ones"
-            ctaLabel="See all"
-            onCtaPress={() => goToCategory(router, 'care-services')}
-            services={childrenOf(parents, 'care-services')}
-            onCardPress={(slug) =>
-              router.push({ pathname: '/(app)/category/[slug]', params: { slug } })
-            }
-          />
-        </View>
-
-        {/* ── Per-category slider: Vehicle & Driver ─────────────── */}
-        <View style={{ marginTop: 28 }}>
-          <CategoryServicesStrip
-            eyebrow="ON YOUR DOORSTEP"
-            title="Car wash, bike wash & driver"
-            ctaLabel="See all"
-            onCtaPress={() => goToCategory(router, 'vehicle-driver')}
-            services={childrenOf(parents, 'vehicle-driver')}
-            onCardPress={(slug) =>
-              router.push({ pathname: '/(app)/category/[slug]', params: { slug } })
-            }
-          />
-        </View>
-
-        {/* ── Promo banner #4 — Pet care ────────────────────────── */}
-        <View style={{ marginTop: 28 }}>
-          <PromoBanner
-            imageUrl="https://images.unsplash.com/photo-1587300003388-59208cc962cb?w=1200&q=80&auto=format&fit=crop"
-            eyebrow="For your best friend"
-            title={'Dog grooming\nat your home'}
-            subtitle="Certified groomers with hydraulic table + own kit"
-            ctaLabel="Pamper your pet"
-            tint="coral"
-            onPress={() => goToCategory(router, 'pet-care')}
-          />
-        </View>
-
-        {/* ── Per-category slider: Pet Care + Outdoor ───────────── */}
-        <View style={{ marginTop: 24 }}>
-          <CategoryServicesStrip
-            eyebrow="PETS · GARDEN · LAUNDRY"
-            title="Outdoor & Pet"
-            ctaLabel="See all"
-            onCtaPress={() => goToCategory(router, 'pet-care')}
-            services={[...childrenOf(parents, 'pet-care'), ...childrenOf(parents, 'outdoor')]}
-            onCardPress={(slug) =>
-              router.push({ pathname: '/(app)/category/[slug]', params: { slug } })
-            }
-          />
-        </View>
-
-        {/* ── Promo banner carousel (existing) ──────────────────── */}
-        <View style={{ marginTop: 28 }}>
-          <BannerSlider placement="home_hero" />
-        </View>
-
-        {/* ── Live in your area ribbon ──────────────────────────── */}
-        <View className="mt-8 px-5">
-          <SectionHeader title="Live in your area" />
-        </View>
-        <LiveStrip count={featured.data?.count ?? 12} />
-
-        {/* ── Customer testimonials ─────────────────────────────── */}
-        <View className="mt-8 px-5">
-          <SectionHeader
-            eyebrow="FROM OUR CUSTOMERS"
-            title="Real stories from your neighbourhood"
-          />
-        </View>
-        <TestimonialStrip />
-
-        {/* ── Trust narrative footer ────────────────────────────── */}
-        <TrustNarrative />
-
-        {/* ── Mascot sign-off ────────────────────────────────────── */}
-        <MascotSignoff />
       </ScrollView>
     </View>
   );
 }
 
-// ─── Mascot sign-off — last thing on home tab ───────────────────────
-// A namaste mascot with a warm "we're here for you" message — the
-// emotional closer on the home feed that food/travel apps (Toing /
-// Swiggy) put at the bottom to leave a premium last impression.
+/**
+ * The "All" tab feed — dense Myntra rhythm: deal cards, 2-row category
+ * sliders, labelled grid, trust + promo strips, then experts and the
+ * testimonial / trust / mascot closers.
+ */
+function AllFeed({
+  router,
+  parents,
+  featured,
+  onOpenCategory,
+}: {
+  router: ReturnType<typeof useRouter>;
+  parents: CategoryTreeParent[];
+  featured: ReturnType<typeof useFeaturedPros>;
+  onOpenCategory: (slug: string) => void;
+}) {
+  const dealItems = useMemo(() => {
+    const wanted = [
+      'deep-clean',
+      'ac-service',
+      'salon-women',
+      'spa-massage',
+      'pest-control',
+      'hair-makeup',
+    ];
+    const all = parents.flatMap((p) => p.children);
+    const picked = wanted.map((s) => all.find((c) => c.slug === s)).filter(Boolean);
+    const list = (picked.length ? picked : all.slice(0, 6)) as CategoryTreeParent['children'];
+    return list.map((c) => {
+      const deal = synthDeal(c.id, c.basePrice);
+      return {
+        slug: c.slug,
+        name: c.name,
+        imageUrl: c.heroImageUrl,
+        pricePaise: c.basePrice,
+        mrpPaise: deal.mrpPaise,
+        discountLabel: deal.discountLabel,
+      };
+    });
+  }, [parents]);
+
+  const exploreItems = parents.map((p) => ({
+    slug: p.slug,
+    name: p.name,
+    imageUrl: p.heroImageUrl,
+    caption: `${p.children.length} services`,
+  }));
+
+  const sliderItems = (slug: string) =>
+    childrenOf(parents, slug).map((c) => ({
+      slug: c.slug,
+      name: c.name,
+      imageUrl: c.heroImageUrl,
+      pricePaise: c.basePrice,
+    }));
+
+  return (
+    <View>
+      {/* Hero banner carousel */}
+      <View style={{ marginTop: 18 }}>
+        <BannerSlider placement="home_hero" />
+      </View>
+
+      {/* Trust chips */}
+      <View style={{ marginTop: 18 }}>
+        <TrustStrip />
+      </View>
+
+      {/* Deal of the day */}
+      <View style={{ marginTop: 24 }}>
+        <SectionTitle kicker="Limited time" title="Deal of the day" />
+        <View style={{ marginTop: 14 }}>
+          <DealCardGrid items={dealItems} onPress={onOpenCategory} />
+        </View>
+      </View>
+
+      {/* Home cleaning slider */}
+      <View style={{ marginTop: 26 }}>
+        <SectionTitle
+          kicker="Most booked"
+          title="Home & Cleaning"
+          ctaLabel="See all"
+          onCtaPress={() => onOpenCategory('home-care')}
+        />
+        <TwoRowCategorySlider items={sliderItems('home-care')} onPress={onOpenCategory} />
+      </View>
+
+      {/* Salon promo */}
+      <View style={{ marginTop: 26 }}>
+        <PromoBanner
+          imageUrl="https://images.unsplash.com/photo-1560066984-138dadb4c035?w=1200&q=80&auto=format&fit=crop"
+          eyebrow="At your doorstep"
+          title={'Salon & spa,\nat home'}
+          subtitle="Sanitised kits · trained therapists"
+          ctaLabel="Book now"
+          tint="coral"
+          onPress={() => onOpenCategory('beauty-wellness')}
+        />
+      </View>
+
+      {/* Salon slider */}
+      <View style={{ marginTop: 22 }}>
+        <SectionTitle
+          kicker="Glow up"
+          title="Salon & Spa"
+          ctaLabel="See all"
+          onCtaPress={() => onOpenCategory('beauty-wellness')}
+        />
+        <TwoRowCategorySlider items={sliderItems('beauty-wellness')} onPress={onOpenCategory} />
+      </View>
+
+      {/* Top experts */}
+      <View style={{ marginTop: 26 }}>
+        <SectionTitle
+          kicker="Verified · near you"
+          title="Top Experts"
+          ctaLabel="See all"
+          onCtaPress={() => router.push('/(app)/(tabs)/categories')}
+        />
+      </View>
+      <FeaturedProsStrip
+        loading={featured.isPending}
+        error={featured.isError}
+        pros={featured.data?.pros ?? []}
+        onProPress={(id) => router.push({ pathname: '/(app)/pro/[id]', params: { id } })}
+      />
+
+      {/* Appliance slider */}
+      <View style={{ marginTop: 22 }}>
+        <SectionTitle
+          kicker="Same-day visits"
+          title="Appliance Repair"
+          ctaLabel="See all"
+          onCtaPress={() => onOpenCategory('appliances')}
+        />
+        <TwoRowCategorySlider items={sliderItems('appliances')} onPress={onOpenCategory} />
+      </View>
+
+      {/* Daily help promo */}
+      <View style={{ marginTop: 26 }}>
+        <PromoBanner
+          imageUrl="https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=1200&q=80&auto=format&fit=crop"
+          eyebrow="Hourly · verified"
+          title={'Maid, cook & driver,\nby the hour'}
+          subtitle="Background-checked, pay by the hour"
+          ctaLabel="Book hourly"
+          tint="plum"
+          onPress={() => onOpenCategory('daily-help')}
+        />
+      </View>
+
+      {/* Daily help slider */}
+      <View style={{ marginTop: 22 }}>
+        <SectionTitle
+          kicker="Everyday help"
+          title="Daily Help"
+          ctaLabel="See all"
+          onCtaPress={() => onOpenCategory('daily-help')}
+        />
+        <TwoRowCategorySlider items={sliderItems('daily-help')} onPress={onOpenCategory} />
+      </View>
+
+      {/* Home repair slider */}
+      <View style={{ marginTop: 22 }}>
+        <SectionTitle
+          kicker="Fix it fast"
+          title="Home Repair"
+          ctaLabel="See all"
+          onCtaPress={() => onOpenCategory('repairs')}
+        />
+        <TwoRowCategorySlider items={sliderItems('repairs')} onPress={onOpenCategory} />
+      </View>
+
+      {/* Explore all categories */}
+      <View style={{ marginTop: 26 }}>
+        <SectionTitle kicker="Browse" title="Explore all categories" />
+        <View style={{ marginTop: 6 }}>
+          <CircleLabelGrid items={exploreItems} columns={4} onPress={onOpenCategory} />
+        </View>
+      </View>
+
+      {/* Care + vehicle + pet slider */}
+      <View style={{ marginTop: 24 }}>
+        <SectionTitle kicker="More services" title="Care, vehicle & pets" />
+        <TwoRowCategorySlider
+          items={[
+            ...sliderItems('care-services'),
+            ...sliderItems('vehicle-driver'),
+            ...sliderItems('pet-care'),
+            ...sliderItems('outdoor'),
+          ]}
+          onPress={onOpenCategory}
+        />
+      </View>
+
+      {/* Fitness & tutors slider */}
+      <View style={{ marginTop: 24 }}>
+        <SectionTitle
+          kicker="Learn & train"
+          title="Fitness & Tutors"
+          ctaLabel="See all"
+          onCtaPress={() => onOpenCategory('lifestyle')}
+        />
+        <TwoRowCategorySlider items={sliderItems('lifestyle')} onPress={onOpenCategory} />
+      </View>
+
+      {/* Live ribbon */}
+      <View style={{ marginTop: 26 }}>
+        <SectionTitle title="Live in your area" accentBar={false} />
+      </View>
+      <LiveStrip count={featured.data?.count ?? 12} />
+
+      {/* Testimonials */}
+      <View style={{ marginTop: 26 }}>
+        <SectionTitle
+          kicker="From our customers"
+          title="Real stories, real homes"
+          accentBar={false}
+        />
+      </View>
+      <TestimonialStrip />
+
+      {/* Trust narrative + mascot */}
+      <TrustNarrative />
+      <MascotSignoff />
+    </View>
+  );
+}
+
+// ─── Mascot sign-off ────────────────────────────────────────────
 
 function MascotSignoff() {
   return (
@@ -385,17 +429,6 @@ function MascotSignoff() {
           height: 180,
           borderRadius: 90,
           backgroundColor: 'rgba(255,122,92,0.10)',
-        }}
-      />
-      <View
-        style={{
-          position: 'absolute',
-          bottom: -30,
-          left: -30,
-          width: 140,
-          height: 140,
-          borderRadius: 70,
-          backgroundColor: 'rgba(245,199,106,0.18)',
         }}
       />
       <View
@@ -430,14 +463,7 @@ function MascotSignoff() {
           >
             Bharose ke saath,{'\n'}aapke ghar tak.
           </Text>
-          <Text
-            style={{
-              marginTop: 6,
-              fontSize: 13,
-              lineHeight: 19,
-              color: colors.ink.muted,
-            }}
-          >
+          <Text style={{ marginTop: 6, fontSize: 13, lineHeight: 19, color: colors.ink.muted }}>
             Verified. Reliable. Always near.
           </Text>
         </View>
@@ -455,17 +481,18 @@ function HeaderBar({
   onLocationPress,
   onBellPress,
   onAvatarPress,
+  onGridPress,
 }: {
   greeting: string;
   firstName: string;
   onLocationPress: () => void;
   onBellPress: () => void;
   onAvatarPress: () => void;
+  onGridPress: () => void;
 }) {
   return (
     <View style={{ paddingHorizontal: 20, paddingTop: 8 }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-        {/* Location chip — left */}
         <Pressable
           onPress={onLocationPress}
           hitSlop={8}
@@ -476,7 +503,7 @@ function HeaderBar({
             paddingVertical: 6,
             borderRadius: 999,
             backgroundColor: 'rgba(255,255,255,0.10)',
-            maxWidth: '70%',
+            maxWidth: '64%',
           }}
         >
           <View
@@ -512,8 +539,22 @@ function HeaderBar({
           </View>
         </Pressable>
 
-        {/* Bell + avatar — right */}
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <Pressable
+            onPress={onGridPress}
+            hitSlop={10}
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: 20,
+              backgroundColor: 'rgba(255,255,255,0.10)',
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginRight: 10,
+            }}
+          >
+            <Ionicons name="grid-outline" size={19} color="#FFFFFF" />
+          </Pressable>
           <Pressable
             onPress={onBellPress}
             hitSlop={10}
@@ -551,7 +592,7 @@ function HeaderBar({
       </View>
 
       {/* Greeting */}
-      <View style={{ marginTop: 22 }}>
+      <View style={{ marginTop: 18 }}>
         <Text
           style={{
             color: colors.support[300],
@@ -566,7 +607,7 @@ function HeaderBar({
         <Text
           style={{
             color: '#FFFFFF',
-            fontSize: 28,
+            fontSize: 26,
             fontWeight: '800',
             marginTop: 4,
             letterSpacing: -0.4,
@@ -574,15 +615,12 @@ function HeaderBar({
         >
           {firstName ? `${firstName} 👋` : 'Welcome 👋'}
         </Text>
-        <Text style={{ color: colors.brand[200], fontSize: 14, marginTop: 4 }}>
-          Verified pros at your doorstep
-        </Text>
       </View>
     </View>
   );
 }
 
-function SearchPill({ onPress }: { onPress: () => void }) {
+function SearchPill({ onPress, onMicPress }: { onPress: () => void; onMicPress: () => void }) {
   return (
     <Pressable
       onPress={onPress}
@@ -612,15 +650,12 @@ function SearchPill({ onPress }: { onPress: () => void }) {
           fontWeight: '500',
         }}
       >
-        Search for cleaning, salon, AC…
+        Try “cockroach spray”, “salon”, “AC”…
       </Text>
       <View style={{ width: 1, height: 22, backgroundColor: colors.border.DEFAULT }} />
-      <Ionicons
-        name="mic-outline"
-        size={18}
-        color={colors.accent.DEFAULT}
-        style={{ marginLeft: 12 }}
-      />
+      <Pressable onPress={onMicPress} hitSlop={10} style={{ marginLeft: 12 }}>
+        <Ionicons name="mic-outline" size={20} color={colors.accent.DEFAULT} />
+      </Pressable>
     </Pressable>
   );
 }
@@ -635,7 +670,7 @@ function FeaturedProsStrip({
 }: {
   loading: boolean;
   error: boolean;
-  pros: Array<{
+  pros: {
     id: string;
     fullName: string;
     profilePhoto: string | null;
@@ -643,7 +678,7 @@ function FeaturedProsStrip({
     trustScore: number;
     primaryCategory: string | null;
     yearsExperience: number;
-  }>;
+  }[];
   onProPress: (id: string) => void;
 }) {
   if (loading) {
@@ -690,142 +725,6 @@ function FeaturedProsStrip({
   );
 }
 
-// ─── Trending in Jaipur (D6 sample) ────────────────────────────────
-// Renders a row of parent-category filter chips + a horizontal scroll of
-// service cards (leaf categories). When a chip is selected, only leaves
-// under that parent are shown; "All" flattens leaves across every parent.
-
-function TrendingServicesStrip({
-  parents,
-  loading,
-  onCardPress,
-}: {
-  parents: CategoryTreeParent[];
-  loading: boolean;
-  onCardPress: (slug: string) => void;
-}) {
-  const [selectedParent, setSelectedParent] = useState<string | null>(null);
-
-  const chips = useMemo(
-    () => parents.map((p) => ({ key: p.slug, label: p.name, count: p.children.length })),
-    [parents],
-  );
-
-  const visibleLeaves = useMemo(() => {
-    if (selectedParent) {
-      return parents.find((p) => p.slug === selectedParent)?.children ?? [];
-    }
-    // "All" mode: take top 2 from each parent for variety, capped at 12 total.
-    const flattened = parents.flatMap((p) => p.children.slice(0, 2));
-    return flattened.slice(0, 12);
-  }, [parents, selectedParent]);
-
-  if (loading) {
-    return (
-      <View style={{ paddingVertical: 40, alignItems: 'center' }}>
-        <ActivityIndicator color={colors.brand.DEFAULT} />
-      </View>
-    );
-  }
-
-  if (chips.length === 0) {
-    return null;
-  }
-
-  return (
-    <View>
-      <View style={{ marginTop: 12 }}>
-        <FilterChipsRow chips={chips} selectedKey={selectedParent} onSelect={setSelectedParent} />
-      </View>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 14, gap: 12 }}
-      >
-        {visibleLeaves.length === 0 ? (
-          <View
-            style={{
-              width: 200,
-              paddingVertical: 24,
-              alignItems: 'center',
-              backgroundColor: colors.surface.muted,
-              borderRadius: 14,
-            }}
-          >
-            <Text style={{ color: colors.ink.subtle, fontSize: 13 }}>No services yet</Text>
-          </View>
-        ) : (
-          visibleLeaves.map((leaf) => (
-            <ServiceCard
-              key={leaf.id}
-              width={200}
-              imageUrl={leaf.heroImageUrl}
-              title={leaf.name}
-              subtitle={leaf.professionalTitle ?? undefined}
-              rating={4.6 + (Math.abs(leaf.id.charCodeAt(0)) % 4) * 0.1}
-              ratingCount={`${100 + (Math.abs(leaf.id.charCodeAt(1)) % 900)}+`}
-              pricePaise={leaf.basePrice}
-              durationLabel={`${leaf.minDurationMinutes} min`}
-              onPress={() => onCardPress(leaf.slug)}
-              onAddPress={() => onCardPress(leaf.slug)}
-            />
-          ))
-        )}
-      </ScrollView>
-    </View>
-  );
-}
-
-function CategoryGrid({
-  parents,
-  onPress,
-}: {
-  parents: CategoryTreeParent[];
-  onPress: (slug: string) => void;
-}) {
-  // Photo-driven mosaic: 3-col grid with bigger first tile per row pattern.
-  // For now uniform 3-col with PhotoCategoryTile — fast, dense, image-heavy
-  // (YesMadam "Explore Our Categories" pattern). Switch to a mixed mosaic
-  // (1 wide + 2 small) in a future iteration if Vikas wants more variety.
-
-  const minPrice = (p: CategoryTreeParent) => {
-    if (!p.children.length) return null;
-    const m = p.children.reduce((acc, c) => Math.min(acc, c.basePrice), Number.MAX_SAFE_INTEGER);
-    return m === Number.MAX_SAFE_INTEGER ? null : `From ₹${Math.round(m / 100)}`;
-  };
-
-  const rows: CategoryTreeParent[][] = [];
-  for (let i = 0; i < parents.length; i += 3) {
-    rows.push(parents.slice(i, i + 3));
-  }
-
-  return (
-    <View style={{ paddingHorizontal: 16, paddingTop: 6 }}>
-      {rows.map((row, i) => (
-        <View key={i} style={{ flexDirection: 'row', marginTop: i === 0 ? 0 : 10, gap: 10 }}>
-          {row.map((p) => (
-            <PhotoCategoryTile
-              key={p.id}
-              imageUrl={p.heroImageUrl ?? p.bannerUrl}
-              title={p.name}
-              subtitle={`${p.children.length} services`}
-              startingPrice={minPrice(p) ?? undefined}
-              aspectRatio={0.85}
-              onPress={() => onPress(p.slug)}
-            />
-          ))}
-          {/* Spacers to keep last row's tiles aligned at left when < 3 items */}
-          {row.length < 3
-            ? Array.from({ length: 3 - row.length }).map((_, k) => (
-                <View key={`spacer-${k}`} style={{ flex: 1 }} />
-              ))
-            : null}
-        </View>
-      ))}
-    </View>
-  );
-}
-
 // ─── Live in area ribbon ────────────────────────────────────────
 
 function LiveStrip({ count }: { count: number }) {
@@ -840,12 +739,23 @@ function LiveStrip({ count }: { count: number }) {
           padding: 16,
         }}
       >
-        <LiveDot label={`${count} verified pros available right now`} tone="success" />
+        <LiveRow label={`${count} verified pros available right now`} color={colors.success} />
         <View style={{ height: 12 }} />
-        <LiveDot label="4 bookings completed in last hour" tone="brand" />
+        <LiveRow label="4 bookings completed in the last hour" color={colors.brand[600]} />
         <View style={{ height: 12 }} />
-        <LiveDot label="Avg arrival time: 38 min" tone="warning" />
+        <LiveRow label="Avg arrival time: 38 min" color={colors.warning} />
       </View>
+    </View>
+  );
+}
+
+function LiveRow({ label, color }: { label: string; color: string }) {
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+      <View
+        style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: color, marginRight: 10 }}
+      />
+      <Text style={{ fontSize: 13, color: colors.ink.DEFAULT, fontWeight: '600' }}>{label}</Text>
     </View>
   );
 }
@@ -1023,29 +933,6 @@ function TrustBadge({
   );
 }
 
-function ErrorBlock({ onRetry }: { onRetry: () => void }) {
-  return (
-    <View
-      style={{
-        marginHorizontal: 20,
-        marginTop: 10,
-        padding: 16,
-        borderRadius: 14,
-        borderWidth: 1,
-        borderColor: 'rgba(194,54,42,0.30)',
-        backgroundColor: 'rgba(194,54,42,0.06)',
-      }}
-    >
-      <Text style={{ color: colors.danger, fontSize: 14, fontWeight: '600' }}>
-        Couldn&apos;t load services. Check your connection.
-      </Text>
-      <Pressable onPress={onRetry} style={{ marginTop: 8, alignSelf: 'flex-start' }}>
-        <Text style={{ color: colors.brand[700], fontSize: 14, fontWeight: '700' }}>Try again</Text>
-      </Pressable>
-    </View>
-  );
-}
-
 function useGreeting(): string {
   return useMemo(() => {
     const h = new Date().getHours();
@@ -1055,12 +942,8 @@ function useGreeting(): string {
   }, []);
 }
 
-// ─── Section helpers (used by multiple banner+slider blocks) ──────
+// ─── Helpers ────────────────────────────────────────────────────
 
 function childrenOf(parents: CategoryTreeParent[], slug: string): CategoryTreeParent['children'] {
   return parents.find((p) => p.slug === slug)?.children ?? [];
-}
-
-function goToCategory(router: ReturnType<typeof useRouter>, slug: string): void {
-  router.push({ pathname: '/(app)/category/[slug]', params: { slug } });
 }

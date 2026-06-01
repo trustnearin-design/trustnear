@@ -10,7 +10,7 @@ import {
   Keyboard,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Stack, useRouter } from 'expo-router';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { useSearchCategories, type CategorySearchHit } from '../../src/api/discovery';
@@ -19,6 +19,7 @@ import {
   clearRecentSearches,
   getRecentSearches,
 } from '../../src/lib/recentSearches';
+import { useVoiceSearch } from '../../src/lib/useVoiceSearch';
 import { formatRupees } from '../../src/lib/format';
 import { colors } from '../../src/theme/colors';
 
@@ -40,10 +41,15 @@ const SUGGESTED: string[] = [
  */
 export default function SearchScreen() {
   const router = useRouter();
+  const { voice: voiceParam } = useLocalSearchParams<{ voice?: string }>();
   const inputRef = useRef<TextInput>(null);
   const [raw, setRaw] = useState('');
   const [debounced, setDebounced] = useState('');
   const [recent, setRecent] = useState<string[]>([]);
+  // Voice locale toggle — Indian English vs Hindi (Devanagari output).
+  const [lang, setLang] = useState<'en-IN' | 'hi-IN'>('en-IN');
+  const voice = useVoiceSearch();
+  const autoStarted = useRef(false);
 
   useEffect(() => {
     void getRecentSearches().then(setRecent);
@@ -51,10 +57,28 @@ export default function SearchScreen() {
     return () => clearTimeout(t);
   }, []);
 
+  // Auto-start listening when arriving from the home mic button (?voice=1).
+  useEffect(() => {
+    if (voiceParam === '1' && !autoStarted.current) {
+      autoStarted.current = true;
+      void voice.start(lang);
+    }
+  }, [voiceParam, lang, voice]);
+
+  // Pipe recognised speech into the search box → existing debounce/search.
+  useEffect(() => {
+    if (voice.finalText) setRaw(voice.finalText);
+  }, [voice.finalText]);
+
   useEffect(() => {
     const t = setTimeout(() => setDebounced(raw.trim()), 250);
     return () => clearTimeout(t);
   }, [raw]);
+
+  const toggleMic = () => {
+    if (voice.isListening) void voice.stop();
+    else void voice.start(lang);
+  };
 
   const search = useSearchCategories(debounced);
   const isSearching = debounced.length >= 2;
@@ -144,8 +168,61 @@ export default function SearchScreen() {
                 <Ionicons name="close-circle" size={18} color={colors.ink.subtle} />
               </Pressable>
             ) : null}
+            {/* Voice language toggle */}
+            <Pressable
+              hitSlop={6}
+              onPress={() => setLang((l) => (l === 'en-IN' ? 'hi-IN' : 'en-IN'))}
+              style={{
+                marginLeft: 8,
+                paddingHorizontal: 8,
+                paddingVertical: 3,
+                borderRadius: 8,
+                backgroundColor: colors.surface.DEFAULT,
+                borderWidth: 1,
+                borderColor: colors.border.DEFAULT,
+              }}
+            >
+              <Text style={{ fontSize: 11, fontWeight: '800', color: colors.ink.muted }}>
+                {lang === 'hi-IN' ? 'हिं' : 'EN'}
+              </Text>
+            </Pressable>
+            {/* Mic — tap to start/stop voice search */}
+            <Pressable
+              hitSlop={8}
+              onPress={toggleMic}
+              style={{
+                marginLeft: 8,
+                width: 30,
+                height: 30,
+                borderRadius: 15,
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: voice.isListening ? colors.accent.DEFAULT : 'transparent',
+              }}
+            >
+              <Ionicons
+                name={voice.isListening ? 'mic' : 'mic-outline'}
+                size={18}
+                color={voice.isListening ? '#FFFFFF' : colors.accent.DEFAULT}
+              />
+            </Pressable>
           </View>
         </View>
+        {/* Voice status / error strip */}
+        {voice.isListening || voice.error ? (
+          <View style={{ paddingHorizontal: 16, paddingBottom: 10 }}>
+            <Text
+              style={{
+                fontSize: 12,
+                fontWeight: '600',
+                color: voice.error ? colors.danger : colors.accent[700],
+              }}
+            >
+              {voice.error ??
+                (voice.partialText ? `“${voice.partialText}”` : 'Listening… speak now')}
+            </Text>
+          </View>
+        ) : null}
       </SafeAreaView>
 
       <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: 32 }}>
@@ -238,7 +315,7 @@ function ResultsBlock({
 }
 
 function ResultRow({ hit, onPress }: { hit: CategorySearchHit; onPress: () => void }) {
-  const isLeaf = hit.parentId != null;
+  const isLeaf = hit.parentId !== null;
   const subtitleParts: string[] = [];
   if (hit.parent) subtitleParts.push(hit.parent.name);
   if (isLeaf && hit.basePrice > 0) {

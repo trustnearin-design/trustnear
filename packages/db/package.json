@@ -28,6 +28,7 @@
     "typecheck": "tsc --noEmit",
     "db:generate": "dotenv -e ../../.env.local -- prisma generate",
     "db:push": "dotenv -e ../../.env.local -- prisma db push",
+    "db:index": "dotenv -e ../../.env.local -- prisma db execute --file prisma/sql/trgm-index.sql --schema prisma/schema.prisma",
     "db:migrate": "dotenv -e ../../.env.local -- prisma migrate dev",
     "db:migrate:deploy": "dotenv -e ../../.env.local -- prisma migrate deploy",
     "db:studio": "dotenv -e ../../.env.local -- prisma studio",

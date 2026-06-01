@@ -62,26 +62,16 @@ export function PhotoCategoryTile({
         />
       )}
 
-      {/* Dark gradient overlay (bottom 55%) for text contrast — simulated
-          via two layered views since the wrapper Gradient is for solid use. */}
+      {/* Single bottom gradient for text contrast — kept light so the photo
+          stays vivid (avoids the muddy double-overlay look). */}
       <View
         style={{
           position: 'absolute',
           left: 0,
           right: 0,
           bottom: 0,
-          height: '60%',
-          backgroundColor: 'rgba(15, 9, 24, 0.55)',
-        }}
-      />
-      <View
-        style={{
-          position: 'absolute',
-          left: 0,
-          right: 0,
-          bottom: 0,
-          height: '35%',
-          backgroundColor: 'rgba(15, 9, 24, 0.30)',
+          height: '45%',
+          backgroundColor: 'rgba(15, 9, 24, 0.42)',
         }}
       />
 

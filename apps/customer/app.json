@@ -28,7 +28,8 @@
       "googleServicesFile": "./google-services.json",
       "permissions": [
         "android.permission.ACCESS_COARSE_LOCATION",
-        "android.permission.ACCESS_FINE_LOCATION"
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.RECORD_AUDIO"
       ],
       "config": {
         "googleMaps": {
@@ -47,6 +48,13 @@
         "expo-location",
         {
           "locationAlwaysAndWhenInUsePermission": "Allow TrustNear to use your location to find verified pros near you."
+        }
+      ],
+      [
+        "@react-native-voice/voice",
+        {
+          "microphonePermission": "TrustNear needs your microphone to let you search services by voice.",
+          "speechRecognitionPermission": "TrustNear uses speech recognition to turn your voice into a search."
         }
       ],
       "expo-font"

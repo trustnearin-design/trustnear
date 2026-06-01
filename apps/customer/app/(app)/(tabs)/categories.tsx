@@ -1,46 +1,72 @@
+import { useEffect, useState } from 'react';
 import {
   ScrollView,
   View,
   Text,
   Pressable,
   ActivityIndicator,
-  RefreshControl,
-  ImageBackground,
+  Image,
+  useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
-import { useRouter } from 'expo-router';
-import {
-  useCategoryTree,
-  type CategoryTreeChild,
-  type CategoryTreeParent,
-} from '../../../src/api/discovery';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useCategoryTree, type CategoryTreeParent } from '../../../src/api/discovery';
+import { CircleLabelGrid, type CircleLabelItem } from '../../../src/components/ui';
 import { colors } from '../../../src/theme/colors';
 
+const RAIL_W = 92;
+
+/**
+ * Myntra-style "Categories": a tight left rail of parents + a right
+ * "In the Spotlight" pane of the selected parent's children as a labelled
+ * circle grid. The right pane is given an EXPLICIT pixel width (screen − rail)
+ * rather than flex:1 — flex was collapsing the pane and squeezing all text
+ * to near-zero width. Opened from the home grid button (preselects via the
+ * `parent` route param) or the Services tab.
+ */
 export default function CategoriesScreen() {
   const router = useRouter();
-  const { data, isPending, isError, isFetching, refetch } = useCategoryTree();
+  const { parent: parentParam } = useLocalSearchParams<{ parent?: string }>();
+  const { data, isPending, isError, refetch } = useCategoryTree();
   const insets = useSafeAreaInsets();
-  const bottomPad = 64 + insets.bottom + 32;
+  const { width: winW } = useWindowDimensions();
+  const paneW = winW - RAIL_W;
 
-  const totalLeaves = (data?.tree ?? []).reduce((n, p) => n + p.children.length, 0);
+  const parents = data?.tree ?? [];
+  const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (parentParam) setSelectedSlug(parentParam);
+  }, [parentParam]);
+
+  const effectiveSlug =
+    selectedSlug && parents.some((p) => p.slug === selectedSlug)
+      ? selectedSlug
+      : parentParam && parents.some((p) => p.slug === parentParam)
+        ? parentParam
+        : (parents[0]?.slug ?? null);
+  const selected = parents.find((p) => p.slug === effectiveSlug) ?? null;
+
+  const openCategory = (slug: string) =>
+    router.push({ pathname: '/(app)/category/[slug]', params: { slug } });
 
   return (
     <View className="flex-1 bg-surface-muted">
       <StatusBar style="light" />
 
-      {/* Navy header */}
-      <View className="bg-brand-800" style={{ paddingBottom: 28 }}>
+      {/* Compact plum header */}
+      <View className="bg-brand-800" style={{ paddingBottom: 20 }}>
         <View
           style={{
             position: 'absolute',
             top: -40,
             right: -40,
-            width: 200,
-            height: 200,
-            borderRadius: 100,
-            backgroundColor: 'rgba(212,162,76,0.16)',
+            width: 180,
+            height: 180,
+            borderRadius: 90,
+            backgroundColor: 'rgba(255,122,92,0.16)',
           }}
         />
         <SafeAreaView edges={['top']}>
@@ -51,34 +77,28 @@ export default function CategoriesScreen() {
             >
               All services
             </Text>
-            <Text className="mt-1 text-[26px] font-bold text-ink-inverse">
-              What can we do for you?
-            </Text>
-            {totalLeaves > 0 ? (
-              <Text className="mt-1 text-[13px]" style={{ color: colors.accent[200] }}>
-                {totalLeaves} verified services at your doorstep
-              </Text>
-            ) : null}
+            <Text className="mt-1 text-[24px] font-bold text-ink-inverse">Categories</Text>
           </View>
         </SafeAreaView>
       </View>
 
-      {/* Search pill floats on boundary */}
+      {/* Search pill on the boundary */}
       <Pressable
         onPress={() => router.push('/(app)/search')}
-        className="mx-5 -mt-6 flex-row items-center rounded-card border border-border bg-surface px-4 py-3.5"
+        className="mx-5 -mt-5 flex-row items-center rounded-card border border-border bg-surface px-4 py-3"
         style={{
           shadowColor: '#000',
-          shadowOpacity: 0.12,
-          shadowRadius: 14,
-          shadowOffset: { width: 0, height: 6 },
-          elevation: 6,
+          shadowOpacity: 0.1,
+          shadowRadius: 12,
+          shadowOffset: { width: 0, height: 5 },
+          elevation: 5,
         }}
       >
         <Ionicons name="search" size={18} color={colors.ink.subtle} />
         <Text className="ml-3 flex-1 text-[14px] text-ink-subtle">
           Search cleaning, salon, AC&hellip;
         </Text>
+        <Ionicons name="mic-outline" size={18} color={colors.accent.DEFAULT} />
       </Pressable>
 
       {isPending ? (
@@ -93,116 +113,168 @@ export default function CategoriesScreen() {
           </Pressable>
         </View>
       ) : (
-        <ScrollView
-          className="flex-1"
-          contentContainerStyle={{ paddingTop: 16, paddingBottom: bottomPad }}
-          showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl
-              refreshing={isFetching}
-              onRefresh={() => void refetch()}
-              tintColor={colors.brand.DEFAULT}
-            />
-          }
-        >
-          {(data?.tree ?? []).map((parent) => (
-            <ParentBlock
-              key={parent.id}
-              parent={parent}
-              onParentPress={() =>
-                router.push({
-                  pathname: '/(app)/category/[slug]',
-                  params: { slug: parent.slug },
-                })
-              }
-              onChildPress={(child) =>
-                router.push({
-                  pathname: '/(app)/category/[slug]',
-                  params: { slug: child.slug },
-                })
-              }
-            />
-          ))}
-        </ScrollView>
+        <View style={{ flex: 1, flexDirection: 'row', marginTop: 14 }}>
+          {/* ── Left rail ─────────────────────────────────────── */}
+          <ScrollView
+            style={{ width: RAIL_W, backgroundColor: colors.surface.subtle }}
+            contentContainerStyle={{ paddingVertical: 8, paddingBottom: 64 + insets.bottom + 24 }}
+            showsVerticalScrollIndicator={false}
+          >
+            {parents.map((p) => (
+              <RailItem
+                key={p.id}
+                parent={p}
+                active={p.slug === effectiveSlug}
+                onPress={() => setSelectedSlug(p.slug)}
+              />
+            ))}
+          </ScrollView>
+
+          {/* ── Right spotlight pane (explicit width) ─────────── */}
+          <View style={{ width: paneW }}>
+            {selected ? (
+              <ScrollView
+                contentContainerStyle={{ paddingTop: 16, paddingBottom: 64 + insets.bottom + 24 }}
+                showsVerticalScrollIndicator={false}
+              >
+                {/* Header — stacked, full width, no truncation */}
+                <View style={{ paddingHorizontal: 14 }}>
+                  <Text
+                    style={{
+                      fontSize: 10,
+                      fontWeight: '800',
+                      letterSpacing: 1.4,
+                      textTransform: 'uppercase',
+                      color: colors.accent[600],
+                    }}
+                  >
+                    In the spotlight
+                  </Text>
+                  <Text
+                    numberOfLines={1}
+                    style={{
+                      marginTop: 2,
+                      fontSize: 18,
+                      fontWeight: '800',
+                      letterSpacing: -0.3,
+                      color: colors.ink.DEFAULT,
+                    }}
+                  >
+                    {selected.name}
+                  </Text>
+                </View>
+
+                <View style={{ marginTop: 8 }}>
+                  <CircleLabelGrid
+                    items={toCircleItems(selected)}
+                    columns={3}
+                    onPress={openCategory}
+                    paddingHorizontal={6}
+                  />
+                </View>
+
+                {/* View-all button */}
+                <Pressable
+                  onPress={() => openCategory(selected.slug)}
+                  style={{
+                    marginTop: 8,
+                    marginHorizontal: 14,
+                    paddingVertical: 12,
+                    borderRadius: 12,
+                    borderWidth: 1.5,
+                    borderColor: colors.accent.DEFAULT,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexDirection: 'row',
+                  }}
+                >
+                  <Text style={{ color: colors.accent.DEFAULT, fontSize: 13, fontWeight: '800' }}>
+                    View all {selected.name}
+                  </Text>
+                  <Ionicons
+                    name="arrow-forward"
+                    size={14}
+                    color={colors.accent.DEFAULT}
+                    style={{ marginLeft: 6 }}
+                  />
+                </Pressable>
+              </ScrollView>
+            ) : (
+              <View className="flex-1 items-center justify-center">
+                <Text className="text-sm text-ink-subtle">No categories yet.</Text>
+              </View>
+            )}
+          </View>
+        </View>
       )}
     </View>
   );
 }
 
-function ParentBlock({
+function toCircleItems(parent: CategoryTreeParent): CircleLabelItem[] {
+  return parent.children.map((c) => ({
+    slug: c.slug,
+    name: c.name,
+    imageUrl: c.heroImageUrl,
+    caption: `₹${Math.round(c.basePrice / 100)}`,
+  }));
+}
+
+// ─── Left-rail item ─────────────────────────────────────────────
+
+function RailItem({
   parent,
-  onParentPress,
-  onChildPress,
+  active,
+  onPress,
 }: {
   parent: CategoryTreeParent;
-  onParentPress: () => void;
-  onChildPress: (child: CategoryTreeChild) => void;
+  active: boolean;
+  onPress: () => void;
 }) {
   return (
-    <View className="mt-2">
-      <View className="flex-row items-center justify-between px-5">
-        <View className="flex-1">
-          <Text className="text-[17px] font-bold text-ink">{parent.name}</Text>
-          {parent.shortPitch ? (
-            <Text numberOfLines={1} className="mt-0.5 text-[12px] text-ink-muted">
-              {parent.shortPitch}
-            </Text>
-          ) : null}
-        </View>
-        <Pressable onPress={onParentPress} hitSlop={8} className="flex-row items-center">
-          <Text className="text-[12px] font-bold text-brand">View all</Text>
-          <Ionicons
-            name="arrow-forward"
-            size={12}
-            color={colors.brand.DEFAULT}
-            style={{ marginLeft: 4 }}
+    <Pressable
+      onPress={onPress}
+      style={{
+        paddingVertical: 12,
+        alignItems: 'center',
+        backgroundColor: active ? colors.surface.muted : 'transparent',
+        borderLeftWidth: 3,
+        borderLeftColor: active ? colors.accent.DEFAULT : 'transparent',
+      }}
+    >
+      <View
+        style={{
+          width: 52,
+          height: 52,
+          borderRadius: 16,
+          overflow: 'hidden',
+          backgroundColor: colors.brand[100],
+          borderWidth: active ? 2 : 0,
+          borderColor: colors.accent.DEFAULT,
+        }}
+      >
+        {parent.heroImageUrl ? (
+          <Image
+            source={{ uri: parent.heroImageUrl }}
+            style={{ width: '100%', height: '100%' }}
+            resizeMode="cover"
           />
-        </Pressable>
+        ) : null}
       </View>
-
-      <View className="mt-2 flex-row flex-wrap px-3">
-        {parent.children.map((child) => (
-          <View key={child.id} className="w-1/2 p-2">
-            <Pressable
-              onPress={() => onChildPress(child)}
-              className="overflow-hidden rounded-card bg-surface"
-              style={{
-                shadowColor: '#000',
-                shadowOpacity: 0.06,
-                shadowRadius: 8,
-                shadowOffset: { width: 0, height: 3 },
-                elevation: 2,
-              }}
-            >
-              <ImageBackground
-                source={{ uri: child.heroImageUrl ?? undefined }}
-                style={{ height: 100 }}
-                imageStyle={{ backgroundColor: '#E7E5E0' }}
-              >
-                <View
-                  style={{
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    backgroundColor: 'rgba(11,31,58,0.18)',
-                  }}
-                />
-              </ImageBackground>
-              <View className="px-3 py-2.5">
-                <Text numberOfLines={1} className="text-[13px] font-bold text-ink">
-                  {child.name}
-                </Text>
-                <Text className="mt-1 text-[11px] font-bold text-brand">
-                  ₹{Math.round(child.basePrice / 100)}
-                  {child.priceUnit === 'per_hour' ? '/hr' : ''}
-                </Text>
-              </View>
-            </Pressable>
-          </View>
-        ))}
-      </View>
-    </View>
+      <Text
+        numberOfLines={2}
+        style={{
+          marginTop: 5,
+          paddingHorizontal: 3,
+          fontSize: 9.5,
+          lineHeight: 12,
+          textAlign: 'center',
+          fontWeight: active ? '800' : '600',
+          color: active ? colors.accent[700] : colors.ink.muted,
+        }}
+      >
+        {parent.name}
+      </Text>
+    </Pressable>
   );
 }

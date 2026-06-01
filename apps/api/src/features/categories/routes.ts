@@ -127,6 +127,21 @@ categories.get('/tree', async (c) => {
  * Empty / very-short q returns empty results — the customer app keeps
  * the recent-searches list visible until q.length >= 2.
  */
+interface SearchRow {
+  id: string;
+  slug: string;
+  parent_id: string | null;
+  name: string;
+  hero_image_url: string | null;
+  short_pitch: string | null;
+  base_price: number;
+  price_unit: string;
+  min_duration_minutes: number;
+  parent_pid: string | null;
+  parent_slug: string | null;
+  parent_name: string | null;
+}
+
 categories.get('/search', async (c) => {
   const q = (c.req.query('q') ?? '').trim();
   const limit = Math.min(Math.max(Number(c.req.query('limit') ?? 20) || 20, 1), 50);
@@ -135,47 +150,87 @@ categories.get('/search', async (c) => {
     return success(c, { results: [], count: 0, query: q });
   }
 
-  const all = await prisma.serviceCategory.findMany({
-    where: { isActive: true, deletedAt: null },
-    select: {
-      id: true,
-      slug: true,
-      parentId: true,
-      name: true,
-      heroImageUrl: true,
-      shortPitch: true,
-      basePrice: true,
-      priceUnit: true,
-      minDurationMinutes: true,
-      searchKeywords: true,
-      parent: { select: { id: true, slug: true, name: true } },
-    },
-    orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
-  });
-
+  // Fuzzy + synonym search via pg_trgm. Two precise signals — deliberately
+  // NOT a loose substring ILIKE, which made short queries ("ac") match any
+  // keyword containing those letters ("facial"):
+  //   • sim  = best trigram match of the query to the name OR any single
+  //            keyword, using `similarity()` (typo tolerance, e.g. "cockroch
+  //            spry" ≈ keyword "cockroach spray") and `word_similarity()`
+  //            (query matched against the closest word-extent, good for
+  //            prefixes/partials). Per-keyword max — NOT a blob — so the
+  //            score isn't diluted by long keyword lists.
+  //   • kw_exact = a keyword equals the whole query or any one query token
+  //            (handles synonyms like "bartan", "naai", "jhadu").
+  // Results require sim > threshold OR kw_exact OR a name prefix. Exact and
+  // prefix matches sort first; leaves sort above parent hubs (users search
+  // for a service, not a hub). Indexes: prisma/sql/trgm-index.sql.
   const ql = q.toLowerCase();
-  const scored = all
-    .map((cat) => {
-      const nameL = cat.name.toLowerCase();
-      const pitchL = (cat.shortPitch ?? '').toLowerCase();
-      const kwHit = cat.searchKeywords.some((k) => k.toLowerCase().includes(ql));
-      let score = 0;
-      if (nameL.startsWith(ql)) score += 100;
-      else if (nameL.includes(ql)) score += 50;
-      if (kwHit) score += 30;
-      if (pitchL.includes(ql)) score += 10;
-      if (cat.parentId) score += 5;
-      return { cat, score };
-    })
-    .filter((x) => x.score > 0)
-    .sort((a, b) => b.score - a.score)
-    .slice(0, limit)
-    .map(({ cat }) => {
-      const { searchKeywords: _kw, ...rest } = cat;
-      return rest;
-    });
+  const tokens = ql.split(/\s+/).filter(Boolean);
 
-  return success(c, { results: scored, count: scored.length, query: q });
+  const rows = await prisma.$queryRaw<SearchRow[]>`
+    WITH scored AS (
+      SELECT
+        c.id::text                AS id,
+        c.slug,
+        c.parent_id::text         AS parent_id,
+        c.name,
+        c.hero_image_url,
+        c.short_pitch,
+        c.base_price,
+        c.price_unit::text        AS price_unit,
+        c.min_duration_minutes,
+        p.id::text                AS parent_pid,
+        p.slug                    AS parent_slug,
+        p.name                    AS parent_name,
+        GREATEST(
+          similarity(lower(c.name), ${ql}),
+          strict_word_similarity(${ql}, lower(c.name)),
+          COALESCE((
+            SELECT max(GREATEST(similarity(lower(kw), ${ql}), strict_word_similarity(${ql}, lower(kw))))
+            FROM unnest(c.search_keywords) kw
+          ), 0)
+        ) AS sim,
+        (lower(c.name) LIKE ${ql + '%'}) AS name_prefix,
+        EXISTS (
+          SELECT 1 FROM unnest(c.search_keywords) kw
+          WHERE lower(kw) = ${ql} OR lower(kw) = ANY (${tokens}::text[])
+        ) AS kw_exact
+      FROM service_categories c
+      LEFT JOIN service_categories p ON p.id = c.parent_id
+      WHERE c.is_active = true AND c.deleted_at IS NULL
+    )
+    SELECT
+      id, slug, parent_id, name, hero_image_url, short_pitch,
+      base_price, price_unit, min_duration_minutes,
+      parent_pid, parent_slug, parent_name
+    FROM scored
+    WHERE sim > 0.42 OR kw_exact OR name_prefix
+    ORDER BY
+      kw_exact DESC,
+      name_prefix DESC,
+      (parent_id IS NOT NULL) DESC,
+      sim DESC,
+      name ASC
+    LIMIT ${limit};
+  `;
+
+  const results = rows.map((r) => ({
+    id: r.id,
+    slug: r.slug,
+    parentId: r.parent_id,
+    name: r.name,
+    heroImageUrl: r.hero_image_url,
+    shortPitch: r.short_pitch,
+    basePrice: r.base_price,
+    priceUnit: r.price_unit,
+    minDurationMinutes: r.min_duration_minutes,
+    parent:
+      r.parent_pid && r.parent_slug && r.parent_name
+        ? { id: r.parent_pid, slug: r.parent_slug, name: r.parent_name }
+        : null,
+  }));
+
+  return success(c, { results, count: results.length, query: q });
 });
 
 /**
