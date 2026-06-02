@@ -35,6 +35,7 @@ import {
 } from '../../../src/lib/format';
 import { ApiCallError } from '../../../src/api/client';
 import { useCreatePaymentOrder, useVerifyPayment } from '../../../src/api/payments';
+import { REVIEW_TAGS, useSubmitReview, type ReviewTag } from '../../../src/api/reviews';
 import { startCashfreeWebPayment } from '../../../src/lib/cashfree';
 import { colors } from '../../../src/theme/colors';
 import { Avatar } from '../../../src/components/Avatar';
@@ -56,6 +57,7 @@ export default function BookingDetailScreen() {
   const tracking = useBookingTracking(id);
   const [otp, setOtp] = useState<string | null>(null);
   const [showCancel, setShowCancel] = useState(false);
+  const [showReview, setShowReview] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -162,6 +164,10 @@ export default function BookingDetailScreen() {
           </View>
         ) : null}
 
+        {data.status === 'completed' && data.professional ? (
+          <RateCard booking={data} onRate={() => setShowReview(true)} />
+        ) : null}
+
         {customerCanCancel(data.status) ? (
           <View className="mx-5 mt-5">
             <Pressable
@@ -204,6 +210,15 @@ export default function BookingDetailScreen() {
         }}
         loading={cancelMut.isPending}
       />
+
+      {data.professional ? (
+        <ReviewSheet
+          visible={showReview}
+          onClose={() => setShowReview(false)}
+          bookingId={data.id}
+          proName={data.professional.user.fullName}
+        />
+      ) : null}
     </View>
   );
 }
@@ -636,6 +651,188 @@ function CancelSheet({
               )}
             </Pressable>
           </View>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
+// ─── Rating ──────────────────────────────────────────────────────────
+// Shown on a completed booking. Either invites a review or, once one
+// exists (booking.review), reflects the rating the customer gave.
+function RateCard({ booking, onRate }: { booking: BookingDetail; onRate: () => void }) {
+  if (booking.review) {
+    return (
+      <View className="mx-5 mt-5 flex-row items-center rounded-card border border-border bg-surface p-4">
+        <Ionicons name="star" size={20} color={colors.accent.DEFAULT} />
+        <Text className="ml-2 flex-1 text-sm font-semibold text-ink">
+          You rated this {booking.review.rating}★
+        </Text>
+        <Text className="text-xs text-ink-subtle">Thanks for the feedback</Text>
+      </View>
+    );
+  }
+  return (
+    <View className="mx-5 mt-5 rounded-card border border-accent/30 bg-accent/5 p-4">
+      <Text className="text-sm font-bold text-ink">How was your experience?</Text>
+      <Text className="mt-1 text-xs text-ink-muted">
+        Rate {booking.professional?.user.fullName ?? 'your expert'} to help others book with
+        confidence.
+      </Text>
+      <Pressable
+        onPress={onRate}
+        className="mt-3 flex-row items-center justify-center rounded-card bg-accent py-3"
+      >
+        <Ionicons name="star" size={16} color="#fff" />
+        <Text className="ml-2 text-sm font-bold text-ink-inverse">Rate your expert</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+function StarPicker({ value, onChange }: { value: number; onChange: (n: number) => void }) {
+  return (
+    <View className="flex-row justify-center">
+      {[1, 2, 3, 4, 5].map((n) => (
+        <Pressable key={n} onPress={() => onChange(n)} hitSlop={6} className="px-1.5">
+          <Ionicons
+            name={n <= value ? 'star' : 'star-outline'}
+            size={40}
+            color={n <= value ? colors.accent.DEFAULT : colors.border.DEFAULT}
+          />
+        </Pressable>
+      ))}
+    </View>
+  );
+}
+
+const RATING_HINTS = ['', 'Poor', 'Fair', 'Good', 'Great', 'Excellent'];
+
+function ReviewSheet({
+  visible,
+  onClose,
+  bookingId,
+  proName,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  bookingId: string;
+  proName: string;
+}) {
+  const [rating, setRating] = useState(0);
+  const [tags, setTags] = useState<ReviewTag[]>([]);
+  const [text, setText] = useState('');
+  const submit = useSubmitReview();
+
+  // Reset whenever the sheet opens fresh.
+  useEffect(() => {
+    if (!visible) {
+      setRating(0);
+      setTags([]);
+      setText('');
+    }
+  }, [visible]);
+
+  // Drop sentiment-mismatched tags when the rating flips across the midpoint
+  // (e.g. picked "Punctual" at 5★, then dropped to 2★ → clear positives).
+  const positive = rating >= 4;
+  const chips = REVIEW_TAGS.filter((t) => (positive ? t.positive : !t.positive));
+  useEffect(() => {
+    if (rating === 0) return;
+    setTags((prev) =>
+      prev.filter((k) => {
+        const meta = REVIEW_TAGS.find((t) => t.key === k);
+        return meta ? meta.positive === positive : false;
+      }),
+    );
+  }, [rating, positive]);
+
+  const toggleTag = (k: ReviewTag) => {
+    setTags((prev) =>
+      prev.includes(k) ? prev.filter((x) => x !== k) : prev.length >= 5 ? prev : [...prev, k],
+    );
+  };
+
+  const onSubmit = async () => {
+    if (rating < 1) return;
+    try {
+      await submit.mutateAsync({ bookingId, rating, tags, reviewText: text });
+      onClose();
+      Alert.alert('Thank you!', 'Your review helps the TrustNear community.');
+    } catch (e) {
+      Alert.alert(
+        "Couldn't submit",
+        e instanceof ApiCallError ? e.message : 'Please try again in a moment.',
+      );
+    }
+  };
+
+  return (
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+      <Pressable
+        style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}
+        onPress={onClose}
+      >
+        <Pressable onPress={() => undefined} className="rounded-t-3xl bg-surface px-5 pb-8 pt-5">
+          <View className="mx-auto mb-4 h-1 w-12 rounded-full bg-border" />
+          <Text className="text-center text-lg font-bold text-ink">Rate your experience</Text>
+          <Text className="mt-1 text-center text-sm text-ink-muted">with {proName}</Text>
+
+          <View className="mt-5">
+            <StarPicker value={rating} onChange={setRating} />
+            <Text className="mt-2 text-center text-sm font-semibold text-accent">
+              {RATING_HINTS[rating] ?? ''}
+            </Text>
+          </View>
+
+          {rating > 0 ? (
+            <View className="mt-5 flex-row flex-wrap justify-center">
+              {chips.map((t) => {
+                const on = tags.includes(t.key);
+                return (
+                  <Pressable
+                    key={t.key}
+                    onPress={() => toggleTag(t.key)}
+                    className={`m-1 rounded-full border px-3.5 py-2 ${
+                      on ? 'border-accent bg-accent/10' : 'border-border bg-surface'
+                    }`}
+                  >
+                    <Text
+                      className={`text-xs font-semibold ${on ? 'text-accent' : 'text-ink-muted'}`}
+                    >
+                      {t.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          ) : null}
+
+          {rating > 0 ? (
+            <TextInput
+              value={text}
+              onChangeText={setText}
+              placeholder="Add a comment (optional)"
+              placeholderTextColor="#94A3B8"
+              multiline
+              maxLength={2000}
+              className="mt-4 min-h-[72px] rounded-card border border-border bg-surface-muted px-4 py-3 text-sm text-ink"
+            />
+          ) : null}
+
+          <Pressable
+            disabled={rating < 1 || submit.isPending}
+            onPress={() => void onSubmit()}
+            className={`mt-5 items-center rounded-card py-3.5 ${
+              rating >= 1 && !submit.isPending ? 'bg-accent' : 'bg-accent/40'
+            }`}
+          >
+            {submit.isPending ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text className="text-sm font-bold text-ink-inverse">Submit review</Text>
+            )}
+          </Pressable>
         </Pressable>
       </Pressable>
     </Modal>

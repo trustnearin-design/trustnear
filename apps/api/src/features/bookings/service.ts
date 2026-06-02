@@ -796,6 +796,9 @@ export async function getBookingDetail(args: {
           user: { select: { id: true, fullName: true, profilePhoto: true, phone: true } },
         },
       },
+      // Lets the customer app show "Rate your experience" vs "You rated 5★"
+      // without a second round-trip. null = not yet reviewed.
+      review: { select: { id: true, rating: true } },
     },
   });
 

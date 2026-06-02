@@ -90,6 +90,8 @@ export interface BookingDetail {
     trustBadge: 'none' | 'bronze' | 'silver' | 'gold' | 'platinum';
     user: { id: string; fullName: string; profilePhoto: string | null; phone: string };
   } | null;
+  /** Present once the customer has reviewed this booking; null otherwise. */
+  review: { id: string; rating: number } | null;
 }
 
 export interface CreateBookingInput {
