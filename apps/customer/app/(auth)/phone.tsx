@@ -111,7 +111,11 @@ export default function PhoneScreen() {
                 />
                 <TextInput
                   value={digits}
-                  onChangeText={(t) => setDigits(t.replace(/\D/g, '').slice(0, 10))}
+                  onChangeText={(t) => {
+                    let d = t.replace(/\D/g, '');
+                    if (d.length > 10 && d.startsWith('91')) d = d.slice(2);
+                    setDigits(d.slice(0, 10));
+                  }}
                   onFocus={() => setFocused(true)}
                   onBlur={() => setFocused(false)}
                   placeholder="98765 43210"

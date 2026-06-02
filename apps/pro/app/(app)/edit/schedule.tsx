@@ -64,7 +64,9 @@ export default function EditScheduleScreen() {
 
   const onSave = () => {
     if (!canSave) return;
-    const bad = current.find((s) => s.isAvailable && s.startTime >= s.endTime);
+    const bad = current.find(
+      (s) => s.isAvailable && s.endTime !== '00:00' && s.startTime >= s.endTime,
+    );
     if (bad) {
       const dayLabel = DAYS[bad.dayOfWeek]?.label ?? `day ${bad.dayOfWeek}`;
       Alert.alert('Invalid hours', `${dayLabel}: start time must be before end time.`);

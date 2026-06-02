@@ -34,9 +34,11 @@ function statusChip(
 } {
   switch (approvalStatus) {
     case 'approved': {
-      const badge = trustBadge && trustBadge !== 'none' ? trustBadge : 'verified';
+      // Only a real trust tier (e.g. "gold") prefixes the label → "Gold verified".
+      // With no tier, fall back to a plain "Verified" (not "Verified verified").
+      const tier = trustBadge && trustBadge !== 'none' ? trustBadge : null;
       return {
-        label: `${badge.charAt(0).toUpperCase()}${badge.slice(1)} verified`,
+        label: tier ? `${tier.charAt(0).toUpperCase()}${tier.slice(1)} verified` : 'Verified',
         icon: 'shield-checkmark',
         tone: 'success',
       };
@@ -80,7 +82,7 @@ export default function ProfileScreen() {
       return;
     }
     const res = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ['images'],
       allowsEditing: true,
       aspect: [1, 1],
       quality: 0.7,

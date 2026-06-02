@@ -6,6 +6,7 @@ import {
   RefreshControl,
   Switch,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
@@ -46,7 +47,10 @@ export default function ProHomeScreen() {
   };
 
   const toggle = (next: boolean) => {
-    setAvail.mutate(next ? 'online' : 'offline');
+    setAvail.mutate(next ? 'online' : 'offline', {
+      onError: () =>
+        Alert.alert("Couldn't update", 'Availability change failed. Please try again.'),
+    });
   };
 
   const firstName = user?.fullName?.split(' ')[0] ?? 'Pro';
@@ -75,8 +79,7 @@ export default function ProHomeScreen() {
         <BrandHero
           bottomGap={56}
           rightSlot={
-            <Pressable
-              hitSlop={10}
+            <View
               style={{
                 height: 40,
                 width: 40,
@@ -87,7 +90,7 @@ export default function ProHomeScreen() {
               }}
             >
               <Ionicons name="notifications-outline" size={20} color="#FFFFFF" />
-            </Pressable>
+            </View>
           }
         >
           <View style={{ paddingTop: 4 }}>
@@ -447,17 +450,15 @@ function ActionRow({
 function KycNudge({ profile }: { profile: MyProfile | undefined }) {
   const router = useRouter();
   if (!profile) return null;
-  const allVerified =
-    profile.aadhaarVerified &&
-    profile.faceVerified &&
-    profile.bankVerified &&
-    profile.policeVerified;
+  // Police verification is admin-driven (manual) — a pro can never complete it
+  // themselves, so it must NOT gate this "complete your verification" nudge or
+  // the nudge would never disappear. Only pro-completable steps count here.
+  const allVerified = profile.aadhaarVerified && profile.panVerified && profile.bankVerified;
   if (allVerified) return null;
   const pending = [
     !profile.aadhaarVerified && 'Aadhaar',
-    !profile.faceVerified && 'Face match',
+    !profile.panVerified && 'PAN',
     !profile.bankVerified && 'Bank',
-    !profile.policeVerified && 'Police check',
   ].filter(Boolean) as string[];
   return (
     <>

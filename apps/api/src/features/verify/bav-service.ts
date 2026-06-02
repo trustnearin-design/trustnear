@@ -109,18 +109,18 @@ export async function verifyBank(args: {
   }
 
   const lastFour = accountNumber.slice(-4);
-  // Encrypted full account stays in accountNumberEncrypted (existing field).
-  // Plaintext is intentionally never stored unencrypted at rest.
+  // We do NOT persist the full account number. It is only needed transiently
+  // for the BAV verify call above; nothing reads it back (payouts use the
+  // gateway), and storing it plaintext in `accountNumberEncrypted` (no
+  // encryption-at-rest exists) was a PII risk. We keep only the last four for
+  // display. If full-number storage is ever required, add real KMS/AES
+  // encryption first and write the ciphertext here.
   await prisma.professional.update({
     where: { id: pro.id },
     data: {
       bankVerified: true,
       bankAccountLastFour: lastFour,
       bankAccountHolderName: holderName,
-      // For MVP we store the plain account number in the existing
-      // "encrypted" column — encryption-at-rest is on the application
-      // backlog (Phase 5 deploy concern, not MVP).
-      accountNumberEncrypted: accountNumber,
       ifscCode: ifsc,
       kycUpdatedAt: new Date(),
     },

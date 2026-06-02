@@ -278,12 +278,10 @@ export function IncomingJobOverlay() {
             onPress={() => {
               if (!current) return;
               const id = current.bookingId;
-              accept();
-              // Optimistic navigation: the accept mutation might still be
-              // in flight when we route, but the job/[id] screen will
-              // pick up the live status via its own poll. On failure the
-              // overlay surfaces the error before auto-dismissing.
-              router.push({ pathname: '/(app)/job/[id]', params: { id } });
+              // Navigate only on a confirmed accept (passed as the success
+              // callback). A failed accept now surfaces the error in-place
+              // instead of dumping the pro onto an error job screen.
+              accept(() => router.push({ pathname: '/(app)/job/[id]', params: { id } }));
             }}
             style={{
               flexDirection: 'row',

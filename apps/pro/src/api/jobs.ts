@@ -141,7 +141,11 @@ export function useCompleteJob(id: string) {
       apiFetch<{ id: string; status: JobStatus }>(`/bookings/${id}/complete`, {
         method: 'POST',
       }),
-    onSuccess: () => invalidateJobAndLists(qc, id),
+    onSuccess: () => {
+      invalidateJobAndLists(qc, id);
+      // Completion settles the payout → refresh earnings (balance + transactions).
+      void qc.invalidateQueries({ queryKey: ['wallet'] });
+    },
   });
 }
 

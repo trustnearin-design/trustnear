@@ -151,8 +151,12 @@ export default function SearchScreen() {
               autoCorrect={false}
               returnKeyType="search"
               onSubmitEditing={() => {
-                if (results[0]) {
-                  void openCategory(results[0].slug, raw);
+                // Only open when the results actually correspond to what's typed
+                // now (debounce may not have fired yet on a fast enter), and pass
+                // the term that produced them — not the raw input — to avoid
+                // opening a stale/wrong category.
+                if (debounced === raw.trim() && results[0]) {
+                  void openCategory(results[0].slug, debounced);
                 }
               }}
               style={{

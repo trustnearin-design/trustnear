@@ -57,7 +57,7 @@ export interface IncomingJobController {
   current: IncomingJobAlert | null;
   /** Whole seconds left for the *current* alert (0 once expired). */
   secondsLeft: number;
-  accept: () => void;
+  accept: (onAccepted?: () => void) => void;
   decline: () => void;
   acceptPending: boolean;
   declinePending: boolean;
@@ -250,29 +250,35 @@ export function useIncomingJobAlerts(): IncomingJobController {
     },
   });
 
-  const accept = useCallback(() => {
-    if (!current) return;
-    const bookingId = current.bookingId;
-    acceptMut.mutate(bookingId, {
-      onSuccess: () => {
-        dismissCurrent();
-      },
-      onError: (err) => {
-        // Most likely: backend timeout fired while pro was tapping —
-        // booking is now cancelled and being re-offered elsewhere. Tell
-        // the user, then dismiss so the queue moves forward.
-        setAcceptError(
-          err instanceof ApiCallError
-            ? err.message
-            : 'Could not accept. The job may have been reassigned.',
-        );
-        // Give the user 2 seconds to see the message, then drop it.
-        setTimeout(() => {
+  const accept = useCallback(
+    (onAccepted?: () => void) => {
+      if (!current) return;
+      const bookingId = current.bookingId;
+      acceptMut.mutate(bookingId, {
+        onSuccess: () => {
           dismissCurrent();
-        }, 2000);
-      },
-    });
-  }, [acceptMut, current, dismissCurrent]);
+          // Navigate only AFTER a confirmed accept — never optimistically, or a
+          // failed accept would strand the pro on an error job screen.
+          onAccepted?.();
+        },
+        onError: (err) => {
+          // Most likely: backend timeout fired while pro was tapping —
+          // booking is now cancelled and being re-offered elsewhere. Tell
+          // the user, then dismiss so the queue moves forward.
+          setAcceptError(
+            err instanceof ApiCallError
+              ? err.message
+              : 'Could not accept. The job may have been reassigned.',
+          );
+          // Give the user 2 seconds to see the message, then drop it.
+          setTimeout(() => {
+            dismissCurrent();
+          }, 2000);
+        },
+      });
+    },
+    [acceptMut, current, dismissCurrent],
+  );
 
   const decline = useCallback(() => {
     if (!current) return;

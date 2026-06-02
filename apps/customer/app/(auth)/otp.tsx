@@ -78,6 +78,7 @@ export default function OtpScreen() {
       inputRef.current?.focus();
     } catch (e) {
       if (e instanceof ApiCallError) setError(e.message);
+      else setError('Could not resend OTP. Try again.');
     }
   };
 

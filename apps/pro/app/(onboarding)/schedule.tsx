@@ -54,10 +54,12 @@ export default function ScheduleScreen() {
   const onContinue = () => {
     if (!canContinue) return;
     // Validate start < end on every available day
-    const bad = slots.find((s) => s.isAvailable && s.startTime >= s.endTime);
+    const bad = slots.find(
+      (s) => s.isAvailable && s.endTime !== '00:00' && s.startTime >= s.endTime,
+    );
     if (bad) {
       const dayLabel = DAYS[bad.dayOfWeek]?.label ?? `day ${bad.dayOfWeek}`;
-      Alert.alert('Invalid hours', `Day ${dayLabel}: start time must be before end time.`);
+      Alert.alert('Invalid hours', `${dayLabel}: start time must be before end time.`);
       return;
     }
     save.mutate(slots, {

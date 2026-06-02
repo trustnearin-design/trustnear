@@ -218,7 +218,7 @@ export default function EarningsScreen() {
 }
 
 function TxnRow({ txn }: { txn: WalletTxn }) {
-  const isCredit = txn.type === 'credit' || txn.type === 'refund' || txn.type === 'release';
+  const isCredit = txn.type === 'credit' || txn.type === 'release';
   const sign = isCredit ? '+' : '-';
   const { icon, tone, title } = describe(txn);
   return (

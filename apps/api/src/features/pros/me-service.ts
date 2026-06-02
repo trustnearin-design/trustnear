@@ -52,6 +52,12 @@ export async function getMyProfile(userId: string) {
       avgResponseTimeSeconds: true,
       isSubscriptionActive: true,
       subscriptionPlan: true,
+      // Personal-info fields — let the onboarding "personal" step prefill on
+      // resume / rejection re-fix instead of forcing full re-entry.
+      gender: true,
+      dob: true,
+      languagesSpoken: true,
+      currentAddress: true,
       user: {
         select: {
           id: true,

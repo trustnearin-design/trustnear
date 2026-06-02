@@ -51,10 +51,12 @@ export interface OnboardingStatus {
 }
 
 export function useOnboardingStatus() {
+  const isAuthed = useAuthStore((s) => s.isAuthed);
   return useQuery({
     queryKey: ['pro.onboarding.status'],
     queryFn: () => apiFetch<OnboardingStatus>('/pros/me/onboarding/status'),
     staleTime: 15_000,
+    enabled: isAuthed,
   });
 }
 
@@ -306,6 +308,9 @@ function invalidateOnboarding(qc: ReturnType<typeof useQueryClient>): void {
  * re-opens the app mid-flow.
  */
 export function nextStepRoute(status: OnboardingStatus): string {
+  // NOTE: 'police' is intentionally excluded — there is no (onboarding)/police
+  // screen (police verification is manual/admin-side), so routing a rejected
+  // pro there would be a dead-end. Only steps with a real wizard screen belong here.
   const FULL_ORDER: WizardStepKey[] = [
     'personal',
     'photo',
@@ -315,7 +320,6 @@ export function nextStepRoute(status: OnboardingStatus): string {
     'aadhaar',
     'pan',
     'bank',
-    'police',
   ];
 
   // Rejected pro re-fixing: the admin flagged specific steps. Send them to

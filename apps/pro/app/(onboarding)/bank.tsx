@@ -44,7 +44,7 @@ export default function BankWizardScreen() {
       stepIndex={8}
       stepTotal={8}
       title="Bank account"
-      subtitle="Yahin par aapko har booking ka payout milega. Bank verify zaroori hai daily payouts ke liye."
+      subtitle="Yahin par aapko har booking ka payout milega. Bank abhi ya baad mein add kar sakte hain — payouts ke liye zaroori hai."
       mascotVariant="kyc"
       ctaLabel={verified ? 'Continue' : 'Verify bank'}
       onCta={onSubmit}

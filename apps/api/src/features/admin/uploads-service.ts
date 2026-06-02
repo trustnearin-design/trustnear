@@ -19,13 +19,9 @@ import { DomainError, ErrorCode } from '@sevalink/types';
  * stay accessible during a backfill migration.
  */
 
-const ALLOWED_MIME = new Set([
-  'image/jpeg',
-  'image/png',
-  'image/webp',
-  'image/gif',
-  'image/svg+xml',
-]);
+// NOTE: SVG is deliberately NOT allowed. SVGs can embed <script>, so serving
+// an uploaded SVG from our own origin is a stored-XSS vector. Raster only.
+const ALLOWED_MIME = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
 
 const MAX_BYTES = 5 * 1024 * 1024; // 5 MB
 
@@ -47,7 +43,7 @@ export async function saveUpload(input: {
   if (!ALLOWED_MIME.has(input.file.type)) {
     throw new DomainError(
       ErrorCode.SL_900_VALIDATION_ERROR,
-      `Unsupported file type: ${input.file.type}. Allowed: JPEG, PNG, WebP, GIF, SVG.`,
+      `Unsupported file type: ${input.file.type}. Allowed: JPEG, PNG, WebP, GIF.`,
     );
   }
   if (input.file.size === 0) {
@@ -104,7 +100,6 @@ function pickExtension(file: File): string {
     'image/png': '.png',
     'image/webp': '.webp',
     'image/gif': '.gif',
-    'image/svg+xml': '.svg',
   };
   return fromMime[file.type] ?? '.bin';
 }
@@ -128,13 +123,20 @@ async function putS3(key: string, bytes: Uint8Array, mime: string): Promise<stri
   const region = process.env['AWS_REGION'] ?? 'ap-south-1';
   const bucket = process.env['S3_BUCKET_MEDIA']!;
   const client = new S3Client({ region });
+
+  // KYC documents are PII (Aadhaar front/back/selfie, police doc). They must
+  // never be cached as public immutable assets. We mark them private/no-store
+  // here as defense-in-depth. NOTE: the bucket itself must also block public
+  // read for these prefixes and admins should view them via short-lived
+  // presigned URLs — that is an infra change (bucket policy) tracked separately.
+  const isKyc = /^(pro-aadhaar|pro-police|pro-kyc|kyc)\//.test(key);
   await client.send(
     new PutObjectCommand({
       Bucket: bucket,
       Key: key,
       Body: bytes,
       ContentType: mime,
-      CacheControl: 'public, max-age=31536000, immutable',
+      CacheControl: isKyc ? 'private, no-store' : 'public, max-age=31536000, immutable',
     }),
   );
 

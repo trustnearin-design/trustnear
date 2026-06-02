@@ -8,12 +8,17 @@ import { z } from 'zod';
 export const IndianPhoneSchema = z
   .string()
   .trim()
-  .transform((s) => s.replace(/[\s-]/g, ''))
+  // Strip spaces, dashes and a leading '+' so we are left with bare digits.
+  .transform((s) => s.replace(/[\s-]/g, '').replace(/^\+/, ''))
   .pipe(
     z
       .string()
-      .regex(/^(\+?91)?[6-9]\d{9}$/, 'Invalid Indian mobile number')
-      .transform((s) => (s.startsWith('+91') ? s : s.startsWith('91') ? `+${s}` : `+91${s}`)),
+      .regex(/^(91)?[6-9]\d{9}$/, 'Invalid Indian mobile number')
+      // The subscriber number is always the LAST 10 digits. Detecting the
+      // country code via startsWith('91') is wrong because a valid 10-digit
+      // mobile can itself start with '91' (e.g. 9123456789) — that previously
+      // produced the malformed '+9123456789'. slice(-10) is unambiguous.
+      .transform((s) => `+91${s.slice(-10)}`),
   );
 
 export const UuidSchema = z.string().uuid();

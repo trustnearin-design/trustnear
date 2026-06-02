@@ -47,7 +47,11 @@ export default function BookingsScreen() {
             </Text>
             <Text className="mt-1 text-[26px] font-bold text-ink-inverse">My bookings</Text>
             <Text className="mt-0.5 text-[13px]" style={{ color: colors.accent[200] }}>
-              {active.length} active · {past.length} past
+              {isPending
+                ? 'Loading…'
+                : isError
+                  ? ''
+                  : `${active.length} active · ${past.length} past`}
             </Text>
           </View>
         </SafeAreaView>

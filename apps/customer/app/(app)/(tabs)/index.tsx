@@ -896,7 +896,6 @@ function TrustNarrative() {
         </Text>
         <View style={{ marginTop: 16, flexDirection: 'row', flexWrap: 'wrap' }}>
           <TrustBadge icon="finger-print" label="Aadhaar" />
-          <TrustBadge icon="person-circle" label="Face match" />
           <TrustBadge icon="card" label="Bank KYC" />
           <TrustBadge icon="shield-checkmark" label="Police-checked" />
         </View>

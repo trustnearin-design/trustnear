@@ -26,7 +26,7 @@ export interface LegalPage {
 export function useFaqs() {
   return useQuery({
     queryKey: ['faqs'],
-    queryFn: () => apiFetch<{ items: FaqArticle[] }>('/api/v1/faqs'),
+    queryFn: () => apiFetch<{ items: FaqArticle[] }>('/faqs'),
     staleTime: 5 * 60_000,
   });
 }
@@ -34,7 +34,7 @@ export function useFaqs() {
 export function useLegalPage(slug: string) {
   return useQuery({
     queryKey: ['legal', slug],
-    queryFn: () => apiFetch<LegalPage | null>(`/api/v1/legal/${slug}`),
+    queryFn: () => apiFetch<LegalPage | null>(`/legal/${slug}`),
     staleTime: 10 * 60_000,
   });
 }

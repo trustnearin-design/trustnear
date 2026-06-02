@@ -127,6 +127,8 @@ export async function createPaymentForBooking(
  */
 export async function reconcilePayment(args: {
   bookingId: string;
+  /** When set (customer-initiated verify), the booking must belong to this user. Omitted for the trusted webhook path. */
+  callerId?: string;
   fromWebhook?: boolean;
   providerPaymentIdOverride?: string;
 }): Promise<{ status: string; alreadyProcessed: boolean }> {
@@ -143,6 +145,10 @@ export async function reconcilePayment(args: {
   });
   if (!booking) {
     throw new NotFoundError('Booking not found');
+  }
+  // Ownership check for customer-initiated verify (prevents cross-tenant IDOR).
+  if (args.callerId && booking.customerId !== args.callerId) {
+    throw new ForbiddenError('Not your booking');
   }
   if (booking.paymentStatus === 'paid') {
     return { status: 'paid', alreadyProcessed: true };

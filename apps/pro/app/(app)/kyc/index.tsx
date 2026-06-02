@@ -46,7 +46,7 @@ export default function KycHome() {
             <StepCard
               icon="finger-print"
               title="Aadhaar"
-              subtitle="Verify your identity via DigiLocker — Govt-issued, secure"
+              subtitle="Identity verified from the Aadhaar documents you uploaded"
               verified={data.aadhaarVerified}
               verifiedLabel={
                 data.aadhaarLastFour

@@ -145,7 +145,7 @@ export default function ProfileScreen() {
                   Wallet balance
                 </Text>
                 <Text style={{ fontSize: 22, fontWeight: '800', color: '#FFFFFF' }}>
-                  {bal.isPending ? '—' : formatRupees(bal.data?.walletBalance ?? 0)}
+                  {bal.isPending || bal.isError ? '—' : formatRupees(bal.data?.walletBalance ?? 0)}
                 </Text>
                 {(bal.data?.loyaltyPoints ?? 0) > 0 ? (
                   <Text

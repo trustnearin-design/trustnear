@@ -876,7 +876,7 @@ function TrustNarrative() {
           lineHeight: 21,
         }}
       >
-        Aadhaar · Face match · Bank KYC · Police-checked
+        Aadhaar · Bank KYC · Police-checked
       </Text>
     </View>
   );

@@ -81,7 +81,7 @@ export function TwoRowCategorySlider({ items, onPress }: TwoRowCategorySliderPro
                   }}
                 >
                   <Text style={{ color: '#FFFFFF', fontSize: 10.5, fontWeight: '800' }}>
-                    ₹{Math.round(item.pricePaise / 100)}
+                    ₹{Math.floor(item.pricePaise / 100)}
                   </Text>
                 </View>
               ) : null}

@@ -8,6 +8,7 @@ import {
 } from '@sevalink/types';
 import { generateBookingNumber, generateOtp, sha256, timingSafeEqual } from '@sevalink/utils';
 import { logger } from '../../logger.js';
+import { redis } from '../../redis.js';
 import { broadcastBookingStatus } from '../../sockets/broadcaster.js';
 import { findNearbyPros } from '../pros/service.js';
 import {
@@ -654,9 +655,32 @@ export async function verifyBookingOtp(args: {
   if (booking.otpExpiresAt.getTime() < Date.now()) {
     throw new DomainError(ErrorCode.SL_102_OTP_EXPIRED, 'OTP expired', 410);
   }
+
+  // Brute-force guard: cap arrival-OTP attempts per booking (mirrors auth OTP).
+  // After 6 wrong tries inside a 15-min window the OTP is burned so it cannot
+  // be guessed; the customer must refresh their code.
+  const otpAttemptsKey = `booking:otp:attempts:${args.bookingId}`;
+  const otpAttempts = await redis.incr(otpAttemptsKey);
+  if (otpAttempts === 1) await redis.expire(otpAttemptsKey, 900);
+  if (otpAttempts > 6) {
+    await prisma.booking.update({
+      where: { id: booking.id },
+      data: { otpCodeHash: null, otpExpiresAt: null },
+    });
+    await redis.del(otpAttemptsKey).catch(() => undefined);
+    throw new DomainError(
+      ErrorCode.SL_103_OTP_RATE_LIMITED,
+      'Too many incorrect attempts. Ask the customer to refresh their code.',
+      429,
+    );
+  }
+
   if (!timingSafeEqual(booking.otpCodeHash, sha256(args.submittedOtp))) {
     throw new DomainError(ErrorCode.SL_101_INVALID_OTP, 'Incorrect OTP', 401);
   }
+
+  // Correct OTP — clear the attempt counter.
+  await redis.del(otpAttemptsKey).catch(() => undefined);
 
   // OTP verified → instant in_progress
   const updated = await prisma.booking.update({

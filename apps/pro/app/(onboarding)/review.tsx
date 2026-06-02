@@ -215,7 +215,8 @@ export default function ReviewScreen() {
             'aadhaar',
             'pan',
             'bank',
-            'police',
+            // 'police' omitted — verification is manual/admin-side; there is no
+            // wizard screen for it, so it must not render as a tappable row here.
           ] as WizardStepKey[]
         ).map((key) => {
           const meta = STEP_META[key];

@@ -357,7 +357,6 @@ function VerificationGrid({ pro }: { pro: ProDetail }) {
     icon: React.ComponentProps<typeof Ionicons>['name'];
   }> = [
     { key: 'aadhaar', label: 'Aadhaar', icon: 'finger-print', ok: pro.aadhaarVerified },
-    { key: 'face', label: 'Face match', icon: 'person-circle', ok: pro.faceVerified },
     { key: 'bank', label: 'Bank KYC', icon: 'card', ok: pro.bankVerified },
     { key: 'police', label: 'Police', icon: 'shield-checkmark', ok: pro.policeVerified },
   ];

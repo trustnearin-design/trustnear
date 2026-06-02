@@ -117,7 +117,7 @@ export default function AadhaarWizardScreen() {
   return (
     <WizardLayout
       stepIndex={6}
-      stepTotal={6}
+      stepTotal={8}
       title="Aadhaar verification"
       subtitle="Apne Aadhaar ki front, back aur ek selfie upload karein. Hamari team manually verify karegi — approve hote hi aap bookings le sakte hain."
       mascotVariant="kyc"

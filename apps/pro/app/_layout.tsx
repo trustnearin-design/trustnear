@@ -74,6 +74,13 @@ function useAuthRouteGuard(ready: boolean) {
     if (onboarding.isLoading && !onboarding.data) return;
 
     const status = onboarding.data?.approvalStatus ?? 'draft';
+
+    // Let the (pending) screen own the approved -> celebration -> (app) handoff.
+    // Without this, the guard yanks the pro to (app) the instant the 10s poll
+    // flips to 'approved', unmounting the ApprovalCelebration interlude before
+    // it can play. The pending index navigates to (app) after the celebration.
+    if (group === PENDING_GROUP && status === 'approved') return;
+
     const target =
       status === 'approved'
         ? APP_GROUP

@@ -50,6 +50,12 @@ export interface MyProfile {
   avgResponseTimeSeconds: number;
   isSubscriptionActive: boolean;
   subscriptionPlan: string | null;
+  // Personal-info (for onboarding "personal" step prefill on resume). dob is an
+  // ISO date string from the API (slice to YYYY-MM-DD before seeding the form).
+  gender: 'male' | 'female' | 'other' | 'prefer_not_to_say' | null;
+  dob: string | null;
+  languagesSpoken: string[];
+  currentAddress: string | null;
   user: {
     id: string;
     fullName: string;

@@ -59,7 +59,7 @@ export default function WalletScreen() {
                   letterSpacing: -0.8,
                 }}
               >
-                {formatRupees(bal.data?.walletBalance ?? 0)}
+                {bal.isError ? '—' : formatRupees(bal.data?.walletBalance ?? 0)}
               </Text>
             )}
             <Text style={{ marginTop: 4, fontSize: 12, color: colors.brand[200] }}>

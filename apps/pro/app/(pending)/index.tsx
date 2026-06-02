@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { View, Text, Pressable, Linking, ScrollView, AppState, Vibration } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQueryClient } from '@tanstack/react-query';
@@ -12,10 +12,10 @@ import { colors } from '../../src/theme/colors';
 
 /**
  * Submitted-for-review locked screen. Shown when a pro hits Submit and
- * is awaiting admin approval. Polls /onboarding/status every 30s in
- * the background (via TanStack's default refetch behavior + staleTime)
- * so when admin flips to approved/rejected, the root guard redirects
- * out within seconds.
+ * is awaiting admin approval. While mounted it invalidates
+ * /onboarding/status every 10s (explicit setInterval) and immediately on
+ * app foreground, so when admin flips to approved/rejected the guard
+ * redirects out within seconds.
  */
 export default function PendingScreen() {
   const insets = useSafeAreaInsets();
@@ -53,16 +53,22 @@ export default function PendingScreen() {
     }
   }, [onboarding.data?.approvalStatus, celebrating]);
 
+  const goHome = useCallback(() => router.replace('/(app)' as never), [router]);
   if (celebrating) {
-    return <ApprovalCelebration onContinue={() => router.replace('/(app)' as never)} />;
+    return <ApprovalCelebration onContinue={goHome} />;
   }
 
   const submittedAt = onboarding.data?.submittedAt ? new Date(onboarding.data.submittedAt) : null;
 
   const openWhatsApp = () => {
-    // Generic support contact — replace with your business WhatsApp number
     void Linking.openURL(
-      'https://wa.me/919876543210?text=Hi%20TrustNear%2C%20I%20submitted%20my%20pro%20application%20and%20wanted%20to%20check%20the%20status.',
+      'https://wa.me/917976662440?text=Hi%20TrustNear%2C%20I%20submitted%20my%20pro%20application%20and%20wanted%20to%20check%20the%20status.',
+    );
+  };
+
+  const openEmail = () => {
+    void Linking.openURL(
+      'mailto:pros@trustnear.in?subject=Pro%20application%20status&body=Hi%20TrustNear%2C%20I%20submitted%20my%20pro%20application%20and%20wanted%20to%20check%20the%20status.',
     );
   };
 
@@ -169,12 +175,9 @@ export default function PendingScreen() {
         </View>
 
         {/* Support */}
-        <View style={{ alignSelf: 'stretch', marginTop: 24 }}>
-          <OutlineButton
-            label="Contact Support on WhatsApp"
-            onPress={openWhatsApp}
-            icon="logo-whatsapp"
-          />
+        <View style={{ alignSelf: 'stretch', marginTop: 24, gap: 10 }}>
+          <OutlineButton label="Chat on WhatsApp" onPress={openWhatsApp} icon="logo-whatsapp" />
+          <OutlineButton label="Email pros@trustnear.in" onPress={openEmail} icon="mail-outline" />
         </View>
 
         <Text
@@ -252,7 +255,7 @@ function formatRelativeTime(date: Date): string {
 
 /**
  * Approval celebration interlude — full-screen overlay shown when admin
- * just approved the pro. Auto-routes to (app) after 4 seconds OR on
+ * just approved the pro. Auto-routes to (app) after 6 seconds OR on
  * "Let's go" tap. Confetti is decorative (small emoji rain) — full
  * confetti animation can come later via react-native-reanimated.
  */
@@ -268,7 +271,6 @@ function ApprovalCelebration({ onContinue }: { onContinue: () => void }) {
   const confetti = Array.from({ length: 30 }, (_, i) => ({
     key: i,
     left: Math.random() * 100,
-    delay: Math.random() * 2000,
     emoji: ['🎉', '🎊', '✨', '🥳', '🏆'][i % 5],
   }));
 

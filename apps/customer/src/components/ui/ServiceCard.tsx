@@ -196,7 +196,7 @@ export function ServiceCard({
           }}
         >
           <Text style={{ color: colors.accent.DEFAULT, fontSize: 13, fontWeight: '800' }}>
-            Add to cart
+            Book
           </Text>
         </Pressable>
       </View>

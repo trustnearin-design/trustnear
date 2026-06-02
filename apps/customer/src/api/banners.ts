@@ -24,7 +24,7 @@ export function useBanners(placement: Banner['placement']) {
   return useQuery({
     queryKey: ['banners', placement] as const,
     queryFn: async (): Promise<Banner[]> => {
-      const data = await apiFetch<{ banners: Banner[] }>(`/api/v1/banners?placement=${placement}`);
+      const data = await apiFetch<{ banners: Banner[] }>(`/banners?placement=${placement}`);
       return data.banners;
     },
     // Banners change rarely — 5 minute stale window keeps the home screen

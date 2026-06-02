@@ -69,6 +69,7 @@ interface CashfreeOrderStatusResponse {
   order_id?: string;
   order_status?: string;
   order_amount?: number;
+  payment_session_id?: string;
   payments?: {
     cf_payment_id?: number;
     payment_status?: string;
@@ -128,8 +129,9 @@ export class CashfreePaymentProvider implements PaymentProvider {
 
   async createOrder(input: CreateOrderInput): Promise<CreateOrderResult> {
     const body = {
-      // Use our bookingId as order_id — guarantees idempotency.
-      // Cashfree rejects duplicate order_ids → caller catches + treats as success.
+      // Use our bookingId as order_id — guarantees idempotency. A duplicate
+      // order_id is caught below and recovered via recoverExistingOrder(),
+      // which returns a fresh live session for the existing order.
       order_id: input.bookingId,
       order_amount: Number(paiseToRupeesString(input.amountPaise)),
       order_currency: 'INR',
@@ -157,6 +159,23 @@ export class CashfreePaymentProvider implements PaymentProvider {
     const json = (await res.json()) as CashfreeCreateOrderResponse;
 
     if (!res.ok) {
+      // Cashfree rejects a duplicate order_id (our bookingId). That just means
+      // a payment session was already minted for this booking — recover by
+      // fetching the existing order and returning a FRESH, live session token
+      // (the persisted one is single-use/expired). This is what makes "Pay"
+      // safely retryable instead of failing with "token is not present".
+      const isDuplicate =
+        res.status === 409 ||
+        json.code === 'order_already_exists' ||
+        (json.message ?? '').toLowerCase().includes('already exists') ||
+        (json.message ?? '').toLowerCase().includes('order_id already exists');
+      if (isDuplicate) {
+        logger.warn(
+          { orderId: input.bookingId, json },
+          'cashfree createOrder: duplicate order_id — recovering existing session',
+        );
+        return await this.recoverExistingOrder(input);
+      }
       logger.error({ status: res.status, json }, 'cashfree createOrder failed');
       throw new DomainError(
         ErrorCode.SL_401_PAYMENT_FAILED,
@@ -179,6 +198,58 @@ export class CashfreePaymentProvider implements PaymentProvider {
       providerOrderId: json.order_id,
       paymentSessionId: json.payment_session_id,
       status: mapStatus(json.order_status ?? 'ACTIVE'),
+      amountPaise: json.order_amount ? rupeesToPaise(json.order_amount) : input.amountPaise,
+      provider: this.name,
+      environment: this.environment,
+      raw: json,
+    };
+  }
+
+  /**
+   * Fetch an already-created Cashfree order and return a live session for it.
+   * Cashfree's GET /orders/{id} returns a fresh `payment_session_id` while the
+   * order is ACTIVE, so this hands the SDK a valid (non-expired) token on retry.
+   */
+  private async recoverExistingOrder(input: CreateOrderInput): Promise<CreateOrderResult> {
+    const res = await fetch(`${this.baseUrl}/orders/${encodeURIComponent(input.bookingId)}`, {
+      method: 'GET',
+      headers: this.headers(),
+      signal: AbortSignal.timeout(10_000),
+    });
+    const json = (await res.json()) as CashfreeCreateOrderResponse & CashfreeOrderStatusResponse;
+    if (!res.ok) {
+      throw new DomainError(
+        ErrorCode.SL_401_PAYMENT_FAILED,
+        json.message ?? `Cashfree order recovery failed (${String(res.status)})`,
+        502,
+        { raw: json },
+      );
+    }
+    const status = mapStatus(json.order_status ?? 'ACTIVE');
+    // Already paid — nothing to retry; surface as PAID so the service reconciles.
+    if (status === 'PAID') {
+      return {
+        providerOrderId: json.order_id ?? input.bookingId,
+        paymentSessionId: json.payment_session_id ?? '',
+        status,
+        amountPaise: json.order_amount ? rupeesToPaise(json.order_amount) : input.amountPaise,
+        provider: this.name,
+        environment: this.environment,
+        raw: json,
+      };
+    }
+    if (!json.payment_session_id) {
+      throw new DomainError(
+        ErrorCode.SL_401_PAYMENT_FAILED,
+        'Cashfree recovery returned no payment_session_id (order not ACTIVE)',
+        502,
+        { raw: json },
+      );
+    }
+    return {
+      providerOrderId: json.order_id ?? input.bookingId,
+      paymentSessionId: json.payment_session_id,
+      status,
       amountPaise: json.order_amount ? rupeesToPaise(json.order_amount) : input.amountPaise,
       provider: this.name,
       environment: this.environment,

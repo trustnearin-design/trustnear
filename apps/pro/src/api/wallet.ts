@@ -31,7 +31,7 @@ export interface WalletTxn {
 export function useWalletBalance() {
   return useQuery({
     queryKey: ['wallet', 'balance'],
-    queryFn: () => apiFetch<WalletBalance>('/api/v1/wallet/balance'),
+    queryFn: () => apiFetch<WalletBalance>('/wallet/balance'),
     staleTime: 30_000,
   });
 }
@@ -40,9 +40,7 @@ export function useWalletTransactions(limit = 50) {
   return useQuery({
     queryKey: ['wallet', 'transactions', limit],
     queryFn: () =>
-      apiFetch<{ transactions: WalletTxn[]; count: number }>(
-        `/api/v1/wallet/transactions?limit=${limit}`,
-      ),
+      apiFetch<{ transactions: WalletTxn[]; count: number }>(`/wallet/transactions?limit=${limit}`),
     staleTime: 15_000,
   });
 }

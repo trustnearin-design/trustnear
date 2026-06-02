@@ -4,7 +4,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { WizardLayout } from '../../src/components/wizard/WizardLayout';
-import { useUploadPhoto } from '../../src/api/onboarding';
+import { useUploadPhoto, useOnboardingStatus } from '../../src/api/onboarding';
 import { colors } from '../../src/theme/colors';
 
 /**
@@ -17,6 +17,10 @@ import { colors } from '../../src/theme/colors';
 export default function PhotoScreen() {
   const router = useRouter();
   const upload = useUploadPhoto();
+  const onboarding = useOnboardingStatus();
+  // A returning pro who already uploaded a photo on a prior session must be
+  // able to continue WITHOUT re-uploading — honour the server's completion flag.
+  const serverDone = onboarding.data?.steps?.photo?.done ?? false;
   const [localUri, setLocalUri] = useState<string | null>(null);
   const [serverUrl, setServerUrl] = useState<string | null>(null);
 
@@ -32,14 +36,14 @@ export default function PhotoScreen() {
     const res =
       source === 'camera'
         ? await ImagePicker.launchCameraAsync({
-            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            mediaTypes: ['images'],
             allowsEditing: true,
             aspect: [1, 1],
             quality: 0.8,
             cameraType: ImagePicker.CameraType.front,
           })
         : await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            mediaTypes: ['images'],
             allowsEditing: true,
             aspect: [1, 1],
             quality: 0.8,
@@ -59,7 +63,7 @@ export default function PhotoScreen() {
   };
 
   const onContinue = () => {
-    if (!serverUrl) {
+    if (!serverUrl && !serverDone) {
       Alert.alert('Photo required', 'Please add a profile photo to continue.');
       return;
     }
@@ -73,9 +77,9 @@ export default function PhotoScreen() {
       title="Profile photo"
       subtitle="Aapka chehra dikhana zaroori hai — customers trust karte hain verified profiles ko."
       mascotVariant="photo"
-      ctaLabel={!serverUrl ? 'Upload photo to continue' : 'Continue'}
+      ctaLabel={!serverUrl && !serverDone ? 'Upload photo to continue' : 'Continue'}
       onCta={onContinue}
-      ctaDisabled={!serverUrl}
+      ctaDisabled={!serverUrl && !serverDone}
       ctaLoading={upload.isPending}
     >
       {/* Preview circle */}

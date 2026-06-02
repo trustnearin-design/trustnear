@@ -16,8 +16,9 @@ const payments = new Hono<AuthContext>();
  * Customer-initiated. Creates a payment order with the active gateway and
  * returns the SDK session token for the mobile app to open the payment UI.
  *
- * Send X-Idempotency-Key on this — double-tap on the Pay button must not
- * create two orders.
+ * Idempotency is enforced via the Cashfree order_id (= our bookingId): a
+ * duplicate create recovers a fresh live session for the existing order, so
+ * repeated Pay taps are safe without caching/replaying the response.
  */
 payments.post(
   '/order',
@@ -48,11 +49,11 @@ payments.post('/verify', authenticate, validator('json', VerifyPaymentInputSchem
   const user = c.get('user');
   const input = c.req.valid('json');
 
-  // Owner-check is also enforced inside reconcilePayment via the booking
-  // lookup, but failing fast here keeps the error code more specific.
-  const result = await reconcilePayment({ bookingId: input.bookingId });
+  // Enforce ownership: only the booking's customer may trigger a verify.
+  // callerId is passed through to reconcilePayment which checks it against
+  // booking.customerId (omitted only for the trusted webhook path).
+  const result = await reconcilePayment({ bookingId: input.bookingId, callerId: user.sub });
   return success(c, { bookingId: input.bookingId, ...result });
-  void user;
 });
 
 /**

@@ -34,7 +34,8 @@ export default function PendingLayout() {
   // NOTE: approved → don't redirect immediately. The index screen detects
   // the transition and plays a celebration interlude before pushing to
   // (app). This avoids a jarring instant cut when the admin approves.
-  if (status === 'draft' || status === 'rejected') return <Redirect href="/(onboarding)/welcome" />;
+  if (status && status !== 'submitted_for_review' && status !== 'approved')
+    return <Redirect href="/(onboarding)/welcome" />;
 
   return (
     <Stack screenOptions={{ headerShown: false }}>

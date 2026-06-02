@@ -54,7 +54,11 @@ export default function OtpScreen() {
         otp,
         ...(fullName.trim() ? { fullName: fullName.trim() } : {}),
       });
-      router.replace('/(app)');
+      // Default to the onboarding entry. The root auth guard reads the freshly
+      // fetched onboarding status and corrects a returning approved/pending pro
+      // to (app)/(pending). Hardcoding '/(app)' here stranded brand-new draft
+      // pros in the tabs until the guard bounced them back.
+      router.replace('/(onboarding)/welcome');
     } catch (e) {
       if (e instanceof ApiCallError) setError(e.message);
       else setError('Something went wrong. Try again.');
@@ -71,6 +75,7 @@ export default function OtpScreen() {
       inputRef.current?.focus();
     } catch (e) {
       if (e instanceof ApiCallError) setError(e.message);
+      else setError('Could not resend OTP. Try again.');
     }
   };
 

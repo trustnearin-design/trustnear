@@ -179,6 +179,7 @@ function JobCard({
         method: 'POST',
       }),
     onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['pro.job', job.id] });
       void qc.invalidateQueries({ queryKey: ['pro.me.jobs'] });
       void qc.invalidateQueries({ queryKey: ['pro.me.today'] });
     },
@@ -193,7 +194,9 @@ function JobCard({
         body: { reason: 'Pro declined the match' },
       }),
     onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['pro.job', job.id] });
       void qc.invalidateQueries({ queryKey: ['pro.me.jobs'] });
+      void qc.invalidateQueries({ queryKey: ['pro.me.today'] });
     },
     onError: (e) => {
       Alert.alert("Can't decline", e instanceof ApiCallError ? e.message : 'Try again.');

@@ -181,7 +181,7 @@ export default function BookExpertScreen() {
   // The server reconfirms the exact figure at booking time.
   const displayTotal =
     appliedPromo?.valid && priceEstimate !== null
-      ? Math.max(0, priceEstimate - appliedPromo.discountPaise)
+      ? appliedPromo.totalPaise // server total = base + platform fee - discount (what is actually charged)
       : priceEstimate;
 
   const slot = SLOTS.find((s) => s.key === slotKey);

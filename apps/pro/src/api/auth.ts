@@ -1,4 +1,4 @@
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiFetch } from './client';
 import { useAuthStore, type AuthUser } from '../stores/auth';
 
@@ -25,6 +25,7 @@ export function useSendOtp() {
 }
 
 export function useVerifyOtp() {
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: async (input: { phone: string; otp: string; fullName?: string }) => {
       const data = await apiFetch<VerifyOtpResponse>('/auth/verify-otp', {
@@ -37,6 +38,10 @@ export function useVerifyOtp() {
         },
         auth: false,
       });
+      // Wipe any cached data from a previous account on this device BEFORE
+      // setting the new session — otherwise the route guard can read the prior
+      // pro's cached onboarding status and route the wrong user.
+      qc.clear();
       await useAuthStore.getState().setSession({
         user: data.user,
         accessToken: data.accessToken,
@@ -48,6 +53,7 @@ export function useVerifyOtp() {
 }
 
 export function useLogout() {
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: async () => {
       const { refreshToken, clearSession } = useAuthStore.getState();
@@ -61,6 +67,9 @@ export function useLogout() {
         });
       }
       await clearSession();
+      // Drop all cached queries so the next account starts clean (no stale
+      // onboarding status / profile leaking across a logout->login switch).
+      qc.clear();
     },
   });
 }

@@ -44,10 +44,19 @@ export default function PersonalScreen() {
   const [languages, setLanguages] = useState<string[]>(['hi']);
   const [address, setAddress] = useState('');
 
-  // Pre-fill from existing profile once it loads
+  // Pre-fill from existing profile once it loads. Functional setters keep any
+  // value the user has already typed, so a refetch never clobbers edits — and a
+  // returning/rejected pro is no longer forced to re-enter everything.
   useEffect(() => {
     if (!profile.data) return;
-    if (profile.data.user.fullName) setFullName(profile.data.user.fullName);
+    const p = profile.data;
+    setFullName((cur) => cur || p.user.fullName || '');
+    setGender((cur) => cur ?? p.gender ?? null);
+    setDob((cur) => cur || (p.dob ? p.dob.slice(0, 10) : ''));
+    setLanguages((cur) =>
+      cur.length === 1 && cur[0] === 'hi' && p.languagesSpoken.length ? p.languagesSpoken : cur,
+    );
+    setAddress((cur) => cur || p.currentAddress || '');
   }, [profile.data]);
 
   const dobIsValid = /^\d{4}-\d{2}-\d{2}$/.test(dob) && isAtLeast18(dob);

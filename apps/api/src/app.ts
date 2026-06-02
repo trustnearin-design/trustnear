@@ -103,9 +103,31 @@ export function createApp(): Hono<{ Variables: { requestId: string } }> {
       windowMs: 60_000,
       max: 240,
       keyPrefix: 'api',
+      // The Cashfree webhook is verified by HMAC and can burst on retries —
+      // never throttle it on the shared IP bucket.
+      skip: (c) => c.req.path.endsWith('/payments/webhook/cashfree'),
       getKey: (c) => {
-        const userId = c.get('userId' as never) as string | undefined;
-        if (userId) return `u:${userId}`;
+        // This middleware runs before per-route authenticate, so c.get('user')
+        // isn't populated yet. Derive the user id straight from the bearer
+        // token's payload for per-user bucketing. The signature is NOT verified
+        // here — that's fine because this is only a rate-limit key, not an auth
+        // decision (a forged token still gets rejected by authenticate, and an
+        // invalid sub just buckets the abuser to themselves).
+        const auth = c.req.header('authorization');
+        const token = auth?.startsWith('Bearer ') ? auth.slice(7) : undefined;
+        if (token) {
+          try {
+            const payloadSeg = token.split('.')[1];
+            if (payloadSeg) {
+              const payload = JSON.parse(Buffer.from(payloadSeg, 'base64url').toString('utf8')) as {
+                sub?: string;
+              };
+              if (payload.sub) return `u:${payload.sub}`;
+            }
+          } catch {
+            /* malformed token — fall back to IP */
+          }
+        }
         const fwd = c.req.header('x-forwarded-for');
         const ip = fwd?.split(',')[0]?.trim() ?? c.req.header('x-real-ip') ?? 'anon';
         return `ip:${ip}`;

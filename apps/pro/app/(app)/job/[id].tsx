@@ -404,7 +404,9 @@ function DetailsCard({ booking }: { booking: JobDetail }) {
         value={
           booking.durationMinutes < 60
             ? `${booking.durationMinutes} min`
-            : `${booking.durationMinutes / 60}h`
+            : booking.durationMinutes % 60 === 0
+              ? `${booking.durationMinutes / 60}h`
+              : `${Math.floor(booking.durationMinutes / 60)}h ${booking.durationMinutes % 60}m`
         }
       />
       {booking.notes ? (
