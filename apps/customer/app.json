@@ -57,7 +57,8 @@
           "speechRecognitionPermission": "TrustNear uses speech recognition to turn your voice into a search."
         }
       ],
-      "expo-font"
+      "expo-font",
+      "./plugins/withExcludeLegacySupport"
     ],
     "experiments": {
       "typedRoutes": true
