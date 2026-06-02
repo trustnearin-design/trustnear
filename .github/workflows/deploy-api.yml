@@ -114,12 +114,43 @@ jobs:
 
       - name: Wait for service to stabilize
         run: |
-          echo "Waiting for ECS service to reach a steady state (up to ~10 min)..."
-          aws ecs wait services-stable \
-            --cluster "${{ secrets.ECS_CLUSTER }}" \
-            --service "${{ secrets.ECS_SERVICE }}" \
-            --region "${{ secrets.AWS_REGION }}"
-          echo "✅ ECS service is stable — deployment succeeded"
+          # `aws ecs wait services-stable` gives up after a fixed ~10 min
+          # (40 × 15s). On the small Fargate task a slightly-slow rollout +
+          # old-task draining can take a touch longer, which made the waiter
+          # exit non-zero even though the deploy actually succeeded (red
+          # "All jobs failed" email for a healthy deploy). So we loop the
+          # waiter up to ~20 min and treat a COMPLETED primary rollout as
+          # success — only a genuine FAILED rollout or true timeout fails.
+          rollout_state() {
+            aws ecs describe-services \
+              --cluster "${{ secrets.ECS_CLUSTER }}" \
+              --services "${{ secrets.ECS_SERVICE }}" \
+              --region "${{ secrets.AWS_REGION }}" \
+              --query 'services[0].deployments[?status==`PRIMARY`].rolloutState | [0]' \
+              --output text 2>/dev/null
+          }
+          echo "Waiting for ECS deployment to complete (up to ~20 min)..."
+          for attempt in 1 2; do
+            if aws ecs wait services-stable \
+                --cluster "${{ secrets.ECS_CLUSTER }}" \
+                --service "${{ secrets.ECS_SERVICE }}" \
+                --region "${{ secrets.AWS_REGION }}"; then
+              echo "✅ ECS service is stable — deployment succeeded"
+              exit 0
+            fi
+            STATE=$(rollout_state)
+            echo "⏳ Waiter attempt $attempt timed out; primary rolloutState=$STATE"
+            if [ "$STATE" = "COMPLETED" ]; then
+              echo "✅ Primary deployment COMPLETED — deployment succeeded"
+              exit 0
+            fi
+            if [ "$STATE" = "FAILED" ]; then
+              echo "❌ Primary deployment FAILED (ECS rolled back) — failing the job"
+              exit 1
+            fi
+          done
+          echo "❌ Service did not stabilize within ~20 min — investigate ECS"
+          exit 1
 
 # ─────────────────────────────────────────────────────────────────────
 # ALTERNATIVE — task-definition-revision flow (use if the task def pins a
