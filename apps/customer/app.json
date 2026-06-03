@@ -42,10 +42,26 @@
           "action": "VIEW",
           "autoVerify": true,
           "data": [
-            { "scheme": "https", "host": "trustnear.in", "pathPrefix": "/pro" },
-            { "scheme": "https", "host": "www.trustnear.in", "pathPrefix": "/pro" },
-            { "scheme": "https", "host": "trustnear.in", "pathPrefix": "/category" },
-            { "scheme": "https", "host": "www.trustnear.in", "pathPrefix": "/category" }
+            {
+              "scheme": "https",
+              "host": "trustnear.in",
+              "pathPrefix": "/pro"
+            },
+            {
+              "scheme": "https",
+              "host": "www.trustnear.in",
+              "pathPrefix": "/pro"
+            },
+            {
+              "scheme": "https",
+              "host": "trustnear.in",
+              "pathPrefix": "/category"
+            },
+            {
+              "scheme": "https",
+              "host": "www.trustnear.in",
+              "pathPrefix": "/category"
+            }
           ],
           "category": ["BROWSABLE", "DEFAULT"]
         }
@@ -64,15 +80,16 @@
           "locationAlwaysAndWhenInUsePermission": "Allow TrustNear to use your location to find verified pros near you."
         }
       ],
+      "expo-font",
+      "./plugins/withExcludeLegacySupport",
       [
-        "@react-native-voice/voice",
+        "expo-speech-recognition",
         {
           "microphonePermission": "TrustNear needs your microphone to let you search services by voice.",
-          "speechRecognitionPermission": "TrustNear uses speech recognition to turn your voice into a search."
+          "speechRecognitionPermission": "TrustNear uses speech recognition to turn your voice into a search.",
+          "androidSpeechServicePackages": ["com.google.android.googlequicksearchbox"]
         }
-      ],
-      "expo-font",
-      "./plugins/withExcludeLegacySupport"
+      ]
     ],
     "experiments": {
       "typedRoutes": true

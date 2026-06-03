@@ -1,6 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
-import { PermissionsAndroid, Platform } from 'react-native';
-import Voice, { type SpeechResultsEvent, type SpeechErrorEvent } from '@react-native-voice/voice';
+import { useCallback, useState } from 'react';
+import { ExpoSpeechRecognitionModule, useSpeechRecognitionEvent } from 'expo-speech-recognition';
 
 export interface VoiceSearch {
   isListening: boolean;
@@ -15,10 +14,12 @@ export interface VoiceSearch {
 }
 
 /**
- * Native speech-to-text via @react-native-voice/voice. Requires a custom
- * dev/EAS build — the native module is NOT available in Expo Go. The
- * recognised text is fed into the existing category search (see search.tsx),
- * so there is no separate "voice search" path.
+ * Native speech-to-text via expo-speech-recognition. Replaces the old
+ * @react-native-voice/voice, whose native module came back null under the
+ * New Architecture ("Cannot read property 'startSpeech' of null"). This
+ * module is New-Arch + Expo compatible. Requires a custom dev/EAS build —
+ * the native module isn't in Expo Go. Recognised text feeds the existing
+ * category search (search.tsx), so there's no separate voice-search path.
  */
 export function useVoiceSearch(): VoiceSearch {
   const [isListening, setIsListening] = useState(false);
@@ -26,56 +27,39 @@ export function useVoiceSearch(): VoiceSearch {
   const [finalText, setFinalText] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    Voice.onSpeechStart = () => {
-      setIsListening(true);
-      setError(null);
-    };
-    Voice.onSpeechEnd = () => setIsListening(false);
-    Voice.onSpeechPartialResults = (e: SpeechResultsEvent) => {
-      const v = e.value?.[0];
-      if (v) setPartialText(v);
-    };
-    Voice.onSpeechResults = (e: SpeechResultsEvent) => {
-      const v = e.value?.[0];
-      if (v) {
-        setPartialText(v);
-        setFinalText(v);
-      }
-    };
-    Voice.onSpeechError = (e: SpeechErrorEvent) => {
-      setIsListening(false);
-      setError(e.error?.message ?? 'Voice recognition failed. Please try again.');
-    };
-
-    return () => {
-      void Voice.destroy().then(() => Voice.removeAllListeners());
-    };
-  }, []);
+  useSpeechRecognitionEvent('start', () => {
+    setIsListening(true);
+    setError(null);
+  });
+  useSpeechRecognitionEvent('end', () => setIsListening(false));
+  useSpeechRecognitionEvent('result', (e) => {
+    const transcript = e.results?.[0]?.transcript;
+    if (transcript) {
+      setPartialText(transcript);
+      if (e.isFinal) setFinalText(transcript);
+    }
+  });
+  useSpeechRecognitionEvent('error', (e) => {
+    setIsListening(false);
+    setError(e.message ?? 'Voice recognition failed. Please try again.');
+  });
 
   const start = useCallback(async (locale = 'en-IN') => {
     setError(null);
     setPartialText('');
     setFinalText(null);
-
-    if (Platform.OS === 'android') {
-      const granted = await PermissionsAndroid.request(
-        PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
-        {
-          title: 'Microphone access',
-          message: 'TrustNear needs your microphone to search by voice.',
-          buttonPositive: 'Allow',
-          buttonNegative: 'Cancel',
-        },
-      );
-      if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
+    try {
+      const perm = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
+      if (!perm.granted) {
         setError('Microphone permission denied');
         return;
       }
-    }
-
-    try {
-      await Voice.start(locale);
+      // start() is fire-and-forget; results arrive via the listeners above.
+      ExpoSpeechRecognitionModule.start({
+        lang: locale,
+        interimResults: true,
+        continuous: false,
+      });
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not start voice search');
     }
@@ -83,7 +67,7 @@ export function useVoiceSearch(): VoiceSearch {
 
   const stop = useCallback(async () => {
     try {
-      await Voice.stop();
+      ExpoSpeechRecognitionModule.stop();
     } catch {
       /* stop can throw if not listening — safe to ignore */
     }
