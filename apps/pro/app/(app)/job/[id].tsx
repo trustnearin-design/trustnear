@@ -11,6 +11,7 @@ import {
   TextInput,
   Alert,
   Platform,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
@@ -23,6 +24,7 @@ import {
   useCancelJob,
   useCompleteJob,
   useJobDetail,
+  useMarkArrived,
   useStartTrip,
   useVerifyJobOtp,
   type JobDetail,
@@ -56,6 +58,7 @@ export default function JobDetailScreen() {
 
   const accept = useAcceptJob(id ?? '');
   const startTrip = useStartTrip(id ?? '');
+  const markArrived = useMarkArrived(id ?? '');
   const verifyOtp = useVerifyJobOtp(id ?? '');
   const complete = useCompleteJob(id ?? '');
   const cancel = useCancelJob(id ?? '');
@@ -103,6 +106,9 @@ export default function JobDetailScreen() {
       } else if (action === 'start_trip') {
         await startTrip.mutateAsync();
       } else if (action === 'arrived') {
+        // Tell the customer to get their OTP ready — best-effort, never blocks
+        // the pro from entering it.
+        markArrived.mutate();
         setOtpVisible(true);
       } else if (action === 'complete') {
         await complete.mutateAsync();
@@ -576,55 +582,60 @@ function OtpEntrySheet({
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <Pressable
-        style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}
-        onPress={onClose}
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={{ flex: 1 }}
       >
-        <Pressable onPress={() => undefined} className="rounded-t-3xl bg-surface px-5 pb-8 pt-5">
-          <View className="mx-auto mb-4 h-1 w-12 rounded-full bg-border" />
-          <Text className="text-lg font-bold text-ink">Enter customer&apos;s OTP</Text>
-          <Text className="mt-1 text-sm text-ink-muted">
-            Ask the customer to read the 6-digit code from their TrustNear app. This proves
-            you&apos;ve arrived and starts the work session.
-          </Text>
+        <Pressable
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}
+          onPress={onClose}
+        >
+          <Pressable onPress={() => undefined} className="rounded-t-3xl bg-surface px-5 pb-8 pt-5">
+            <View className="mx-auto mb-4 h-1 w-12 rounded-full bg-border" />
+            <Text className="text-lg font-bold text-ink">Enter customer&apos;s OTP</Text>
+            <Text className="mt-1 text-sm text-ink-muted">
+              Ask the customer to read the 6-digit code from their TrustNear app. This proves
+              you&apos;ve arrived and starts the work session.
+            </Text>
 
-          <TextInput
-            value={otp}
-            onChangeText={(v) => setOtp(v.replace(/\D/g, '').slice(0, 6))}
-            placeholder="6-digit OTP"
-            placeholderTextColor="#94A3B8"
-            keyboardType="number-pad"
-            maxLength={6}
-            autoFocus
-            className="mt-4 rounded-card border border-border bg-surface-muted px-4 py-4 text-center text-2xl font-bold tracking-[10px] text-ink"
-          />
+            <TextInput
+              value={otp}
+              onChangeText={(v) => setOtp(v.replace(/\D/g, '').slice(0, 6))}
+              placeholder="6-digit OTP"
+              placeholderTextColor="#94A3B8"
+              keyboardType="number-pad"
+              maxLength={6}
+              autoFocus
+              className="mt-4 rounded-card border border-border bg-surface-muted px-4 py-4 text-center text-2xl font-bold tracking-[10px] text-ink"
+            />
 
-          <View className="mt-4 flex-row">
-            <Pressable
-              onPress={() => {
-                setOtp('');
-                onClose();
-              }}
-              className="mr-2 flex-1 items-center rounded-card border border-border bg-surface py-3.5"
-            >
-              <Text className="text-sm font-semibold text-ink-muted">Cancel</Text>
-            </Pressable>
-            <Pressable
-              disabled={!valid || loading}
-              onPress={() => void onSubmit(otp)}
-              className={`ml-2 flex-1 items-center rounded-card py-3.5 ${
-                valid && !loading ? 'bg-brand' : 'bg-brand/30'
-              }`}
-            >
-              {loading ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text className="text-sm font-bold text-ink-inverse">Verify & start</Text>
-              )}
-            </Pressable>
-          </View>
+            <View className="mt-4 flex-row">
+              <Pressable
+                onPress={() => {
+                  setOtp('');
+                  onClose();
+                }}
+                className="mr-2 flex-1 items-center rounded-card border border-border bg-surface py-3.5"
+              >
+                <Text className="text-sm font-semibold text-ink-muted">Cancel</Text>
+              </Pressable>
+              <Pressable
+                disabled={!valid || loading}
+                onPress={() => void onSubmit(otp)}
+                className={`ml-2 flex-1 items-center rounded-card py-3.5 ${
+                  valid && !loading ? 'bg-brand' : 'bg-brand/30'
+                }`}
+              >
+                {loading ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text className="text-sm font-bold text-ink-inverse">Verify & start</Text>
+                )}
+              </Pressable>
+            </View>
+          </Pressable>
         </Pressable>
-      </Pressable>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

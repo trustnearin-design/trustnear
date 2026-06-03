@@ -54,6 +54,85 @@ notifications.post(
 );
 
 /**
+ * GET /api/v1/notifications — the user's in-app notification inbox, newest
+ * first. Cursor-paginated. Every booking/payment/system event writes a row
+ * here (see service.ts dispatch), so this is a reliable history even when a
+ * push was missed.
+ */
+const ListQuerySchema = z.object({
+  cursor: z.string().uuid().optional(),
+  limit: z.coerce.number().int().min(1).max(50).default(20),
+});
+
+notifications.get('/', authenticate, validator('query', ListQuerySchema), async (c) => {
+  const auth = c.get('user');
+  const { cursor, limit } = c.req.valid('query');
+  const rows = await prisma.notification.findMany({
+    where: { userId: auth.sub },
+    orderBy: { createdAt: 'desc' },
+    take: limit + 1,
+    ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+    select: {
+      id: true,
+      type: true,
+      title: true,
+      body: true,
+      data: true,
+      isRead: true,
+      createdAt: true,
+    },
+  });
+  const hasMore = rows.length > limit;
+  const items = hasMore ? rows.slice(0, limit) : rows;
+  const nextCursor = hasMore ? (items[items.length - 1]?.id ?? null) : null;
+  return success(
+    c,
+    { notifications: items, count: items.length },
+    {
+      requestId: c.get('requestId') ?? '',
+      timestamp: new Date().toISOString(),
+      ...(nextCursor ? { cursor: nextCursor } : {}),
+    },
+  );
+});
+
+/**
+ * GET /api/v1/notifications/unread-count — drives the bell badge.
+ */
+notifications.get('/unread-count', authenticate, async (c) => {
+  const auth = c.get('user');
+  const count = await prisma.notification.count({
+    where: { userId: auth.sub, isRead: false },
+  });
+  return success(c, { count });
+});
+
+/**
+ * POST /api/v1/notifications/read-all — mark every unread notification read.
+ */
+notifications.post('/read-all', authenticate, async (c) => {
+  const auth = c.get('user');
+  const res = await prisma.notification.updateMany({
+    where: { userId: auth.sub, isRead: false },
+    data: { isRead: true, readAt: new Date() },
+  });
+  return success(c, { updated: res.count });
+});
+
+/**
+ * POST /api/v1/notifications/:id/read — mark one read (e.g. on tap).
+ */
+notifications.post('/:id/read', authenticate, async (c) => {
+  const auth = c.get('user');
+  const id = c.req.param('id');
+  await prisma.notification.updateMany({
+    where: { id, userId: auth.sub, isRead: false },
+    data: { isRead: true, readAt: new Date() },
+  });
+  return success(c, { ok: true });
+});
+
+/**
  * DELETE /api/v1/notifications/push-token
  * Call on logout. Idempotent — fine to call even if no token is set.
  */

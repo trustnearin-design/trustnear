@@ -62,7 +62,12 @@ export default function ProfileScreen() {
                   backgroundColor: 'rgba(255,255,255,0.18)',
                 }}
               >
-                <Avatar fullName={user?.fullName ?? 'Guest'} size={64} borderColor="#FFFFFF" />
+                <Avatar
+                  fullName={user?.fullName ?? 'Guest'}
+                  photoUrl={user?.profilePhoto ?? undefined}
+                  size={64}
+                  borderColor="#FFFFFF"
+                />
               </View>
               <View style={{ marginLeft: 14, flex: 1 }}>
                 <Text
@@ -166,6 +171,24 @@ export default function ProfileScreen() {
         </Pressable>
 
         <Section title="Account">
+          <MenuRow
+            icon="person-circle-outline"
+            label="Edit profile"
+            onPress={() => router.push('/(app)/edit-profile' as never)}
+          />
+          <Divider />
+          <MenuRow
+            icon="notifications-outline"
+            label="Notifications"
+            onPress={() => router.push('/(app)/notifications' as never)}
+          />
+          <Divider />
+          <MenuRow
+            icon="gift-outline"
+            label="Refer & Earn"
+            onPress={() => router.push('/(app)/refer' as never)}
+          />
+          <Divider />
           <MenuRow
             icon="wallet-outline"
             label="Wallet & transactions"

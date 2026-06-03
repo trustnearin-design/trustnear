@@ -28,3 +28,4 @@ export { TwoRowCategorySlider, type TwoRowItem } from './TwoRowCategorySlider';
 export { DealCardGrid, type DealCardItem } from './DealCardGrid';
 export { TrustStrip } from './TrustStrip';
 export { BrandLoadingScreen } from './BrandLoadingScreen';
+export { KeyboardAwareScrollView } from './KeyboardAwareScrollView';

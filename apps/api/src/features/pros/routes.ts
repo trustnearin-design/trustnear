@@ -8,6 +8,7 @@ import {
   AvailabilityInputSchema,
   MyJobsQuerySchema,
   NearbyQuerySchema,
+  ProfileDetailsSchema,
   ProIdParamSchema,
 } from './schemas.js';
 import {
@@ -18,7 +19,13 @@ import {
   ServicesInputSchema,
 } from './onboarding-schemas.js';
 import { findNearbyPros, getProDetail, listFeaturedPros } from './service.js';
-import { getMyJobs, getMyProfile, getMyTodaySummary, setMyAvailability } from './me-service.js';
+import {
+  getMyJobs,
+  getMyProfile,
+  getMyTodaySummary,
+  saveProfileDetails,
+  setMyAvailability,
+} from './me-service.js';
 import {
   getOnboardingStatus,
   saveArea,
@@ -56,6 +63,23 @@ pros.patch(
     const user = c.get('user');
     const { status } = c.req.valid('json');
     const result = await setMyAvailability(user.sub, status);
+    return success(c, result);
+  },
+);
+
+/**
+ * PATCH /api/v1/pros/me/profile — self-edit title / bio / experience /
+ * languages. No re-review; an approved pro stays live.
+ */
+pros.patch(
+  '/me/profile',
+  authenticate,
+  authorize('professional'),
+  validator('json', ProfileDetailsSchema),
+  async (c) => {
+    const user = c.get('user');
+    const data = c.req.valid('json');
+    const result = await saveProfileDetails(user.sub, data);
     return success(c, result);
   },
 );

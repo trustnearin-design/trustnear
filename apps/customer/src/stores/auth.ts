@@ -20,6 +20,7 @@ export interface AuthUser {
   role: 'customer' | 'professional' | 'admin';
   fullName: string;
   isVerified: boolean;
+  profilePhoto?: string | null;
 }
 
 interface AuthState {
@@ -34,6 +35,7 @@ interface AuthState {
     refreshToken: string;
   }) => Promise<void>;
   updateTokens: (args: { accessToken: string; refreshToken: string }) => Promise<void>;
+  updateUser: (partial: Partial<AuthUser>) => void;
   clearSession: () => Promise<void>;
   setHydrated: (v: boolean) => void;
 }
@@ -65,6 +67,8 @@ export const useAuthStore = create<AuthState>()(
         ]);
         set({ accessToken, refreshToken });
       },
+
+      updateUser: (partial) => set((s) => (s.user ? { user: { ...s.user, ...partial } } : s)),
 
       clearSession: async () => {
         const swallow = () => undefined;

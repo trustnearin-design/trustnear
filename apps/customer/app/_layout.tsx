@@ -2,7 +2,7 @@ import '../global.css';
 
 import { useEffect, useState } from 'react';
 import { Text } from 'react-native';
-import { Stack, useRouter, useSegments } from 'expo-router';
+import { Stack, useRouter, useSegments, usePathname } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -19,6 +19,7 @@ import {
 } from '@expo-google-fonts/plus-jakarta-sans';
 import { bootstrapAuth, useAuthStore } from '../src/stores/auth';
 import { registerPushTokenWithBackend } from '../src/lib/notifications';
+import { isDeferrablePath, setPendingRedirect } from '../src/lib/pendingRedirect';
 
 const noop = () => undefined;
 SplashScreen.preventAutoHideAsync().catch(noop);
@@ -37,6 +38,7 @@ const queryClient = new QueryClient({
 function useAuthRouteGuard(ready: boolean) {
   const isAuthed = useAuthStore((s) => s.isAuthed);
   const segments = useSegments();
+  const pathname = usePathname();
   const router = useRouter();
 
   useEffect(() => {
@@ -48,9 +50,14 @@ function useAuthRouteGuard(ready: boolean) {
     if (isAuthed && (inAuthGroup || (!inAppGroup && !inAuthGroup))) {
       router.replace('/(app)');
     } else if (!isAuthed && (inAppGroup || (!inAuthGroup && !inAppGroup))) {
+      // A deep link (e.g. a shared /pro/<id>) opened an authed-only screen
+      // while logged out — remember it so login can land the user there.
+      if (inAppGroup && isDeferrablePath(pathname)) {
+        setPendingRedirect(pathname);
+      }
       router.replace('/(auth)/welcome');
     }
-  }, [ready, isAuthed, segments, router]);
+  }, [ready, isAuthed, segments, pathname, router]);
 }
 
 /**

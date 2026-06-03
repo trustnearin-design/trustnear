@@ -122,6 +122,20 @@ export function useStartTrip(id: string) {
   });
 }
 
+/**
+ * Pro tapped "I'm at the location" — pings the backend so the customer gets
+ * a "share your OTP" push. Best-effort: a failure here must not block the pro
+ * from opening the OTP sheet, so callers fire-and-forget.
+ */
+export function useMarkArrived(id: string) {
+  return useMutation({
+    mutationFn: () =>
+      apiFetch<{ notified: boolean }>(`/bookings/${id}/arrived`, {
+        method: 'POST',
+      }),
+  });
+}
+
 export function useVerifyJobOtp(id: string) {
   const qc = useQueryClient();
   return useMutation({

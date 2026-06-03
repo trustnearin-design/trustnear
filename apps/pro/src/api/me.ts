@@ -56,6 +56,7 @@ export interface MyProfile {
   dob: string | null;
   languagesSpoken: string[];
   currentAddress: string | null;
+  serviceRadiusKm: number;
   user: {
     id: string;
     fullName: string;
@@ -129,6 +130,28 @@ export function useMyJobs(segment: JobsSegment) {
         `/pros/me/jobs?segment=${segment}`,
       ),
     staleTime: 15_000,
+  });
+}
+
+export interface ProfileDetailsInput {
+  professionalTitle?: string;
+  bio?: string;
+  yearsExperience?: number;
+  languagesSpoken?: string[];
+}
+
+/**
+ * Self-edit title / bio / experience. Approved pros can call this any time
+ * — no re-review. Refreshes the cached profile on success.
+ */
+export function useSaveProfileDetails() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: ProfileDetailsInput) =>
+      apiFetch<{ ok: true }>('/pros/me/profile', { method: 'PATCH', body: data }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['pro.me'] });
+    },
   });
 }
 

@@ -203,6 +203,12 @@ export default function ProfileScreen() {
           ) : null}
         </View>
 
+        <SectionTitle onEdit={() => router.push('/(app)/edit/details')}>About you</SectionTitle>
+        <AboutCard profile={profile.data} />
+
+        <SectionTitle onEdit={() => router.push('/(app)/edit/location')}>Service area</SectionTitle>
+        <ServiceAreaCard profile={profile.data} />
+
         <SectionTitle>Verification</SectionTitle>
         <Pressable
           onPress={() => router.push('/(app)/kyc')}
@@ -355,6 +361,55 @@ function KycRow({
       </Text>
       <Ionicons name="chevron-forward" size={16} color={colors.ink.subtle} />
     </Pressable>
+  );
+}
+
+function AboutCard({ profile }: { profile: MyProfile | undefined }) {
+  if (!profile) return null;
+  const hasContent = !!profile.professionalTitle || !!profile.bio;
+  return (
+    <View className="mx-5 mt-2 rounded-card bg-surface p-4">
+      {hasContent ? (
+        <>
+          {profile.professionalTitle ? (
+            <Text className="text-[14px] font-bold text-ink">{profile.professionalTitle}</Text>
+          ) : null}
+          {profile.bio ? (
+            <Text className="mt-1 text-[12px] leading-[18px] text-ink-muted">{profile.bio}</Text>
+          ) : null}
+          <Text className="mt-2 text-[11px] font-semibold text-ink-subtle">
+            {profile.yearsExperience > 0
+              ? `${profile.yearsExperience}+ years experience`
+              : 'New pro'}
+          </Text>
+        </>
+      ) : (
+        <View className="items-center py-1">
+          <Text className="text-[13px] font-bold text-ink">Add a title &amp; bio</Text>
+          <Text className="mt-1 text-center text-[12px] text-ink-muted">
+            Customers trust pros who describe their work. Tap Edit to add yours.
+          </Text>
+        </View>
+      )}
+    </View>
+  );
+}
+
+function ServiceAreaCard({ profile }: { profile: MyProfile | undefined }) {
+  if (!profile) return null;
+  const city = profile.user.area ?? profile.user.city ?? null;
+  return (
+    <View className="mx-5 mt-2 flex-row items-center rounded-card bg-surface p-4">
+      <View className="mr-3 h-9 w-9 items-center justify-center rounded-full bg-brand-50">
+        <Ionicons name="navigate" size={16} color={colors.brand.DEFAULT} />
+      </View>
+      <View className="flex-1">
+        <Text className="text-[14px] font-bold text-ink">{profile.serviceRadiusKm} km radius</Text>
+        <Text className="text-[11px] text-ink-subtle">
+          {city ? `Around ${city}` : 'Tap Edit to set your base location'}
+        </Text>
+      </View>
+    </View>
   );
 }
 

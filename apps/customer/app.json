@@ -16,7 +16,8 @@
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "in.trustnear.customer"
+      "bundleIdentifier": "in.trustnear.customer",
+      "associatedDomains": ["applinks:trustnear.in", "applinks:www.trustnear.in"]
     },
     "android": {
       "package": "in.trustnear.customer",
@@ -35,7 +36,20 @@
         "googleMaps": {
           "apiKey": "AIzaSyCyq1RycJhHbGCASXgWzR4IEueeFVi-rus"
         }
-      }
+      },
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            { "scheme": "https", "host": "trustnear.in", "pathPrefix": "/pro" },
+            { "scheme": "https", "host": "www.trustnear.in", "pathPrefix": "/pro" },
+            { "scheme": "https", "host": "trustnear.in", "pathPrefix": "/category" },
+            { "scheme": "https", "host": "www.trustnear.in", "pathPrefix": "/category" }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"

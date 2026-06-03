@@ -58,6 +58,8 @@ export async function getMyProfile(userId: string) {
       dob: true,
       languagesSpoken: true,
       currentAddress: true,
+      // Service radius — needed to prefill the post-approval "edit area" map.
+      serviceRadiusKm: true,
       user: {
         select: {
           id: true,
@@ -102,6 +104,36 @@ export async function getMyProfile(userId: string) {
     throw new NotFoundError('Professional profile not found for this user');
   }
   return pro;
+}
+
+/**
+ * Self-edit the pro's presentation fields (title / bio / experience /
+ * languages). Available any time — including after approval — without
+ * triggering re-review, since none of these affect verification. Only the
+ * provided keys are written (partial PATCH).
+ */
+export async function saveProfileDetails(
+  userId: string,
+  data: {
+    professionalTitle?: string | undefined;
+    bio?: string | undefined;
+    yearsExperience?: number | undefined;
+    languagesSpoken?: string[] | undefined;
+  },
+): Promise<{ ok: true }> {
+  const pro = await requireProByUserId(userId);
+  await prisma.professional.update({
+    where: { id: pro.id },
+    data: {
+      ...(data.professionalTitle !== undefined
+        ? { professionalTitle: data.professionalTitle }
+        : {}),
+      ...(data.bio !== undefined ? { bio: data.bio } : {}),
+      ...(data.yearsExperience !== undefined ? { yearsExperience: data.yearsExperience } : {}),
+      ...(data.languagesSpoken !== undefined ? { languagesSpoken: data.languagesSpoken } : {}),
+    },
+  });
+  return { ok: true };
 }
 
 /**

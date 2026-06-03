@@ -1,20 +1,18 @@
 import { useEffect, useRef, useState } from 'react';
-import {
-  View,
-  Text,
-  TextInput,
-  Pressable,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-} from 'react-native';
+import { View, Text, TextInput, Pressable } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
 import { useSendOtp, useVerifyOtp } from '../../src/api/auth';
 import { formatIndianPhone } from '../../src/lib/format';
 import { ApiCallError } from '../../src/api/client';
-import { BrandHero, CoralButton, MascotImage, ProgressDots } from '../../src/components/ui';
+import {
+  BrandHero,
+  CoralButton,
+  KeyboardAwareScrollView,
+  MascotImage,
+  ProgressDots,
+} from '../../src/components/ui';
 import { colors } from '../../src/theme/colors';
 
 const RESEND_COOLDOWN = 30;
@@ -84,154 +82,144 @@ export default function OtpScreen() {
   return (
     <View className="flex-1 bg-surface-muted">
       <StatusBar style="light" />
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      <KeyboardAwareScrollView
         style={{ flex: 1 }}
-        keyboardVerticalOffset={0}
+        contentContainerStyle={{ flexGrow: 1, paddingBottom: 32 }}
       >
-        <ScrollView
-          contentContainerStyle={{ flexGrow: 1, paddingBottom: 32 }}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
+        <BrandHero
+          onBack={() => router.back()}
+          bottomGap={28}
+          rightSlot={
+            <View style={{ paddingHorizontal: 4 }}>
+              <ProgressDots total={5} activeIndex={1} inverse />
+            </View>
+          }
         >
-          <BrandHero
-            onBack={() => router.back()}
-            bottomGap={28}
-            rightSlot={
-              <View style={{ paddingHorizontal: 4 }}>
-                <ProgressDots total={5} activeIndex={1} inverse />
-              </View>
-            }
-          >
-            <View style={{ alignItems: 'center', paddingTop: 4 }}>
-              <MascotImage variant="verifier" tone="coral" size={120} />
-              <Text className="mt-3 font-display text-h2 text-ink-inverse">Almost there!</Text>
-              <Text className="mt-1.5 text-body text-center" style={{ color: colors.brand[200] }}>
-                6-digit code sent to{' '}
-                <Text style={{ color: '#FFFFFF', fontWeight: '700' }}>
-                  {phone ? formatIndianPhone(phone) : ''}
-                </Text>
+          <View style={{ alignItems: 'center', paddingTop: 4 }}>
+            <MascotImage variant="verifier" tone="coral" size={120} />
+            <Text className="mt-3 font-display text-h2 text-ink-inverse">Almost there!</Text>
+            <Text className="mt-1.5 text-body text-center" style={{ color: colors.brand[200] }}>
+              6-digit code sent to{' '}
+              <Text style={{ color: '#FFFFFF', fontWeight: '700' }}>
+                {phone ? formatIndianPhone(phone) : ''}
               </Text>
-            </View>
-          </BrandHero>
+            </Text>
+          </View>
+        </BrandHero>
 
-          <View
+        <View
+          style={{
+            marginTop: -24,
+            backgroundColor: colors.surface.muted,
+            borderTopLeftRadius: 28,
+            borderTopRightRadius: 28,
+            paddingHorizontal: 22,
+            paddingTop: 28,
+          }}
+        >
+          <Text className="mb-3 text-overline uppercase text-ink-subtle">Enter OTP</Text>
+          <Pressable onPress={() => inputRef.current?.focus()} className="flex-row justify-between">
+            {digits.map((d, idx) => {
+              const filled = d.trim().length > 0;
+              const isCursor = otpFocused && idx === otp.length;
+              const borderColor = isCursor
+                ? colors.accent.DEFAULT
+                : filled
+                  ? colors.brand[700]
+                  : colors.border.DEFAULT;
+              return (
+                <View
+                  key={idx}
+                  style={{
+                    width: 48,
+                    height: 60,
+                    borderRadius: 14,
+                    borderWidth: 2,
+                    borderColor,
+                    backgroundColor: colors.surface.DEFAULT,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    shadowColor: filled ? colors.brand[800] : 'transparent',
+                    shadowOpacity: filled ? 0.06 : 0,
+                    shadowRadius: 6,
+                    shadowOffset: { width: 0, height: 2 },
+                  }}
+                >
+                  <Text className="font-display text-h2 text-ink">{d.trim()}</Text>
+                </View>
+              );
+            })}
+          </Pressable>
+          <TextInput
+            ref={inputRef}
+            value={otp}
+            onChangeText={(t) => setOtp(t.replace(/\D/g, '').slice(0, 6))}
+            onFocus={() => setOtpFocused(true)}
+            onBlur={() => setOtpFocused(false)}
+            keyboardType="number-pad"
+            maxLength={6}
+            autoFocus
             style={{
-              marginTop: -24,
-              backgroundColor: colors.surface.muted,
-              borderTopLeftRadius: 28,
-              borderTopRightRadius: 28,
-              paddingHorizontal: 22,
-              paddingTop: 28,
+              position: 'absolute',
+              opacity: 0,
+              height: 60,
+              width: '100%',
+              top: 36,
             }}
-          >
-            <Text className="mb-3 text-overline uppercase text-ink-subtle">Enter OTP</Text>
-            <Pressable
-              onPress={() => inputRef.current?.focus()}
-              className="flex-row justify-between"
-            >
-              {digits.map((d, idx) => {
-                const filled = d.trim().length > 0;
-                const isCursor = otpFocused && idx === otp.length;
-                const borderColor = isCursor
-                  ? colors.accent.DEFAULT
-                  : filled
-                    ? colors.brand[700]
-                    : colors.border.DEFAULT;
-                return (
-                  <View
-                    key={idx}
-                    style={{
-                      width: 48,
-                      height: 60,
-                      borderRadius: 14,
-                      borderWidth: 2,
-                      borderColor,
-                      backgroundColor: colors.surface.DEFAULT,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      shadowColor: filled ? colors.brand[800] : 'transparent',
-                      shadowOpacity: filled ? 0.06 : 0,
-                      shadowRadius: 6,
-                      shadowOffset: { width: 0, height: 2 },
-                    }}
-                  >
-                    <Text className="font-display text-h2 text-ink">{d.trim()}</Text>
-                  </View>
-                );
-              })}
-            </Pressable>
-            <TextInput
-              ref={inputRef}
-              value={otp}
-              onChangeText={(t) => setOtp(t.replace(/\D/g, '').slice(0, 6))}
-              onFocus={() => setOtpFocused(true)}
-              onBlur={() => setOtpFocused(false)}
-              keyboardType="number-pad"
-              maxLength={6}
-              autoFocus
-              style={{
-                position: 'absolute',
-                opacity: 0,
-                height: 60,
-                width: '100%',
-                top: 36,
-              }}
-            />
+          />
 
-            <View className="mt-7">
-              <Text className="mb-2 text-overline uppercase text-ink-subtle">
-                Your name{' '}
-                <Text style={{ textTransform: 'none', letterSpacing: 0, color: colors.ink.subtle }}>
-                  (first time only)
-                </Text>
+          <View className="mt-7">
+            <Text className="mb-2 text-overline uppercase text-ink-subtle">
+              Your name{' '}
+              <Text style={{ textTransform: 'none', letterSpacing: 0, color: colors.ink.subtle }}>
+                (first time only)
               </Text>
-              <View
-                className={`rounded-card border-2 px-4 py-3.5 ${
-                  nameFocused ? 'border-accent bg-surface' : 'border-border bg-surface'
-                }`}
-              >
-                <TextInput
-                  value={fullName}
-                  onChangeText={setFullName}
-                  onFocus={() => setNameFocused(true)}
-                  onBlur={() => setNameFocused(false)}
-                  placeholder="Anita Sharma"
-                  placeholderTextColor={colors.ink.subtle}
-                  autoCapitalize="words"
-                  className="text-bodyLg text-ink"
-                  style={{ fontWeight: '600' }}
-                />
-              </View>
-            </View>
-
-            {error ? (
-              <View className="mt-3 flex-row items-center">
-                <Ionicons name="alert-circle" size={14} color={colors.danger} />
-                <Text className="ml-1.5 text-small font-display text-danger">{error}</Text>
-              </View>
-            ) : null}
-
-            <View className="mt-6">
-              <CoralButton
-                label="Verify & continue"
-                onPress={onVerify}
-                disabled={otp.length !== 6}
-                loading={verifyOtp.isPending}
+            </Text>
+            <View
+              className={`rounded-card border-2 px-4 py-3.5 ${
+                nameFocused ? 'border-accent bg-surface' : 'border-border bg-surface'
+              }`}
+            >
+              <TextInput
+                value={fullName}
+                onChangeText={setFullName}
+                onFocus={() => setNameFocused(true)}
+                onBlur={() => setNameFocused(false)}
+                placeholder="Anita Sharma"
+                placeholderTextColor={colors.ink.subtle}
+                autoCapitalize="words"
+                className="text-bodyLg text-ink"
+                style={{ fontWeight: '600' }}
               />
             </View>
-
-            <Pressable onPress={onResend} disabled={cooldown > 0} className="mt-6 items-center">
-              <Text
-                className="text-small font-display"
-                style={{ color: cooldown > 0 ? colors.ink.subtle : colors.brand[700] }}
-              >
-                {cooldown > 0 ? `Resend OTP in ${cooldown}s` : 'Resend OTP'}
-              </Text>
-            </Pressable>
           </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+
+          {error ? (
+            <View className="mt-3 flex-row items-center">
+              <Ionicons name="alert-circle" size={14} color={colors.danger} />
+              <Text className="ml-1.5 text-small font-display text-danger">{error}</Text>
+            </View>
+          ) : null}
+
+          <View className="mt-6">
+            <CoralButton
+              label="Verify & continue"
+              onPress={onVerify}
+              disabled={otp.length !== 6}
+              loading={verifyOtp.isPending}
+            />
+          </View>
+
+          <Pressable onPress={onResend} disabled={cooldown > 0} className="mt-6 items-center">
+            <Text
+              className="text-small font-display"
+              style={{ color: cooldown > 0 ? colors.ink.subtle : colors.brand[700] }}
+            >
+              {cooldown > 0 ? `Resend OTP in ${cooldown}s` : 'Resend OTP'}
+            </Text>
+          </Pressable>
+        </View>
+      </KeyboardAwareScrollView>
     </View>
   );
 }

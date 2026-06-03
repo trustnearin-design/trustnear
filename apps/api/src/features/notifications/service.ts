@@ -177,6 +177,34 @@ export async function notifyBookingArrived(args: {
   });
 }
 
+/**
+ * Fired the moment the pro's OTP is accepted and the work session begins
+ * (status → in_progress). This is the "ride start" notification — the
+ * customer's signal that the service is now actively underway. Distinct
+ * from `notifyBookingArrived` (which prompts them to SHARE the OTP); this
+ * confirms it WORKED and the clock is running.
+ */
+export async function notifyServiceStarted(args: {
+  customerId: string;
+  bookingId: string;
+  professionalName: string;
+}): Promise<void> {
+  const copy = await resolveCopy(
+    'booking_started',
+    { professionalName: args.professionalName },
+    {
+      title: 'Your service has started',
+      body: `${args.professionalName} has begun working on your booking. Track progress live.`,
+    },
+  );
+  await dispatch({
+    userId: args.customerId,
+    type: 'booking_status',
+    ...copy,
+    data: { bookingId: args.bookingId, deepLink: `/booking/${args.bookingId}` },
+  });
+}
+
 export async function notifyBookingCompleted(args: {
   customerId: string;
   bookingId: string;

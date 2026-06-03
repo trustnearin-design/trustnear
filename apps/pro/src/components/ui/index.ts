@@ -10,3 +10,4 @@ export { Chip } from './Chip';
 export { LiveDot } from './LiveDot';
 export { CoralButton, OutlineButton } from './CoralButton';
 export { Gradient } from './Gradient';
+export { KeyboardAwareScrollView } from './KeyboardAwareScrollView';

@@ -21,6 +21,7 @@ import {
   priceUnitLabel,
 } from '../../../src/lib/format';
 import { categoryPhoto, portfolioFor } from '../../../src/lib/imagery';
+import { shareExpert } from '../../../src/lib/links';
 import { colors } from '../../../src/theme/colors';
 import { Avatar } from '../../../src/components/Avatar';
 import { BrandHero, CoralButton } from '../../../src/components/ui';
@@ -102,6 +103,13 @@ function Hero({ pro }: { pro: ProDetail }) {
         <View style={{ flexDirection: 'row' }}>
           <Pressable
             hitSlop={10}
+            onPress={() =>
+              void shareExpert({
+                professionalId: pro.id,
+                fullName: pro.user.fullName,
+                title: pro.professionalTitle,
+              })
+            }
             style={{
               marginRight: 8,
               height: 40,

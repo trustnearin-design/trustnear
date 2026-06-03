@@ -22,6 +22,7 @@ import {
   notifyBookingCompleted,
   notifyBookingEnRoute,
   notifyBookingMatched,
+  notifyServiceStarted,
 } from '../notifications/service.js';
 import { calculatePrice } from './pricing.js';
 import { resolvePromo } from './promo.js';
@@ -697,8 +698,10 @@ export async function verifyBookingOtp(args: {
   broadcastBookingStatus(updated.id, updated.status);
 
   // verifyBookingOtp bypasses transitionBooking so its notifications hook
-  // doesn't fire — push the "arrived" notification here directly. Same
-  // fire-and-forget contract.
+  // doesn't fire — push the "service started" notification here directly.
+  // This is the moment the work session actually begins (OTP accepted →
+  // in_progress), which is the "ride start" signal the customer waits for.
+  // Same fire-and-forget contract.
   void (async () => {
     const detail = await prisma.booking.findUnique({
       where: { id: args.bookingId },
@@ -708,16 +711,68 @@ export async function verifyBookingOtp(args: {
       },
     });
     if (!detail) return;
-    await notifyBookingArrived({
+    await notifyServiceStarted({
       customerId: detail.customerId,
       bookingId: args.bookingId,
       professionalName: detail.professional?.user.fullName ?? 'Your expert',
     });
   })().catch((err: unknown) => {
-    logger.error({ err, bookingId: args.bookingId }, 'notify: arrived dispatch failed');
+    logger.error({ err, bookingId: args.bookingId }, 'notify: service-started dispatch failed');
   });
 
   return updated;
+}
+
+/**
+ * Pro tapped "I'm at the location" — notify the customer to share their OTP.
+ * Deliberately does NOT change booking status (the OTP verify does that);
+ * it only fires the "your expert has arrived, share your OTP" push at the
+ * right moment instead of after verification. Pro-only + must own the
+ * booking. Idempotent within a short window via a Redis guard so a
+ * double-tap doesn't double-notify.
+ */
+export async function markProArrived(args: {
+  bookingId: string;
+  actorUserId: string;
+}): Promise<{ notified: boolean }> {
+  const booking = await prisma.booking.findUnique({
+    where: { id: args.bookingId },
+    select: {
+      id: true,
+      status: true,
+      customerId: true,
+      professional: { select: { userId: true, user: { select: { fullName: true } } } },
+    },
+  });
+  if (!booking) {
+    throw new NotFoundError('Booking not found');
+  }
+  if (booking.professional?.userId !== args.actorUserId) {
+    throw new ForbiddenError('Only the assigned professional can mark arrival');
+  }
+  // Only meaningful while en route (pre-OTP). Outside that window this is a
+  // no-op so stale taps can't spam the customer.
+  if (booking.status !== 'pro_en_route' && booking.status !== 'confirmed') {
+    return { notified: false };
+  }
+
+  // Redis SETNX guard — one arrival push per booking per hour. ioredis
+  // returns 'OK' when the key was set, null when it already existed.
+  const guardKey = `booking:arrived-notified:${args.bookingId}`;
+  const fresh = await redis.set(guardKey, '1', 'EX', 3600, 'NX').catch(() => null);
+  if (fresh !== 'OK') {
+    return { notified: false };
+  }
+
+  void notifyBookingArrived({
+    customerId: booking.customerId,
+    bookingId: booking.id,
+    professionalName: booking.professional?.user.fullName ?? 'Your expert',
+  }).catch((err: unknown) => {
+    logger.error({ err, bookingId: args.bookingId }, 'notify: arrived dispatch failed');
+  });
+
+  return { notified: true };
 }
 
 export interface ListBookingsArgs {

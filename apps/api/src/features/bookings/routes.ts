@@ -15,6 +15,7 @@ import {
   createBooking,
   getBookingDetail,
   listBookings,
+  markProArrived,
   transitionBooking,
   validatePromoForBooking,
   verifyBookingOtp,
@@ -141,6 +142,21 @@ bookings.post('/:id/start-trip', validator('param', BookingIdParamSchema), async
     actorRole: user.role,
     nextStatus: 'pro_en_route',
   });
+  return success(c, result);
+});
+
+/**
+ * POST /api/v1/bookings/:id/arrived — pro tapped "I'm at the location".
+ * Fires the "share your OTP" push to the customer at the right moment.
+ * Does NOT change booking status (OTP verify does that). Pro-only.
+ */
+bookings.post('/:id/arrived', validator('param', BookingIdParamSchema), async (c) => {
+  const user = c.get('user');
+  if (user.role !== 'professional') {
+    throw new ForbiddenError('Only the professional can mark arrival');
+  }
+  const { id } = c.req.valid('param');
+  const result = await markProArrived({ bookingId: id, actorUserId: user.sub });
   return success(c, result);
 });
 
