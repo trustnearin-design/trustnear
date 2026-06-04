@@ -27,7 +27,10 @@ const RESEND_COOLDOWN = 30;
  */
 export default function OtpScreen() {
   const router = useRouter();
-  const { phone } = useLocalSearchParams<{ phone: string }>();
+  const { phone, referralCode } = useLocalSearchParams<{
+    phone: string;
+    referralCode?: string;
+  }>();
   const [otp, setOtp] = useState('');
   const [fullName, setFullName] = useState('');
   const [otpFocused, setOtpFocused] = useState(false);
@@ -59,10 +62,13 @@ export default function OtpScreen() {
         phone,
         otp,
         ...(fullName.trim() ? { fullName: fullName.trim() } : {}),
+        ...(referralCode?.trim() ? { referralCode: referralCode.trim() } : {}),
       });
       // If a shared deep link brought them here, land on that screen.
+      // Otherwise route through the location step (it self-skips for users
+      // who already have a saved city).
       const target = consumePendingRedirect();
-      router.replace((target ?? '/(app)') as never);
+      router.replace((target ?? '/(app)/location-setup') as never);
     } catch (e) {
       if (e instanceof ApiCallError) setError(e.message);
       else setError('Something went wrong. Try again.');

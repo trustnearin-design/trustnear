@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { View, Text, TextInput, Pressable, ActivityIndicator, Alert } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
@@ -16,6 +16,7 @@ import { CoralButton, KeyboardAwareScrollView } from '../../src/components/ui';
  */
 export default function EditProfileScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const me = useMe();
   const update = useUpdateProfile();
 
@@ -153,7 +154,10 @@ export default function EditProfileScreen() {
         </KeyboardAwareScrollView>
       )}
 
-      <View className="absolute bottom-0 left-0 right-0 border-t border-border bg-surface px-5 pb-8 pt-3">
+      <View
+        className="absolute bottom-0 left-0 right-0 border-t border-border bg-surface px-5 pt-3"
+        style={{ paddingBottom: Math.max(insets.bottom, 16) }}
+      >
         <CoralButton
           label="Save changes"
           onPress={onSave}

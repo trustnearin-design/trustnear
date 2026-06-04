@@ -19,6 +19,13 @@ export interface CreatePaymentOrderResult {
    */
   environment?: 'sandbox' | 'production';
   status: string;
+  /** Wallet balance applied to this booking (paise). */
+  walletApplied: number;
+  /**
+   * True when the wallet covered the full amount and the booking was settled
+   * server-side — skip the gateway SDK and confirm directly.
+   */
+  paid: boolean;
 }
 
 export interface VerifyPaymentResult {
@@ -41,10 +48,22 @@ export interface VerifyPaymentResult {
  */
 export function useCreatePaymentOrder() {
   return useMutation({
-    mutationFn: ({ bookingId, customerEmail }: { bookingId: string; customerEmail?: string }) =>
+    mutationFn: ({
+      bookingId,
+      customerEmail,
+      useWallet,
+    }: {
+      bookingId: string;
+      customerEmail?: string;
+      useWallet?: boolean;
+    }) =>
       apiFetch<CreatePaymentOrderResult>('/payments/order', {
         method: 'POST',
-        body: { bookingId, ...(customerEmail ? { customerEmail } : {}) },
+        body: {
+          bookingId,
+          ...(customerEmail ? { customerEmail } : {}),
+          ...(useWallet !== undefined ? { useWallet } : {}),
+        },
       }),
   });
 }

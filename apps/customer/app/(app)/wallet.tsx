@@ -1,8 +1,24 @@
-import { View, Text, ScrollView, RefreshControl, ActivityIndicator } from 'react-native';
+import { useState } from 'react';
+import {
+  View,
+  Text,
+  ScrollView,
+  RefreshControl,
+  ActivityIndicator,
+  Pressable,
+  Alert,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
-import { useWalletBalance, useWalletTransactions, type WalletTxn } from '../../src/api/wallet';
+import {
+  useWalletBalance,
+  useWalletTransactions,
+  useCreateTopup,
+  useVerifyTopup,
+  type WalletTxn,
+} from '../../src/api/wallet';
+import { startCashfreeWebPayment } from '../../src/lib/cashfree';
 import { formatRupees } from '../../src/lib/format';
 import { colors } from '../../src/theme/colors';
 import { BrandHero, MascotImage, SectionHeader } from '../../src/components/ui';
@@ -112,6 +128,9 @@ export default function WalletScreen() {
           />
         }
       >
+        {/* Add money */}
+        <AddMoneyCard onAdded={() => void bal.refetch()} />
+
         {/* "How wallet works" educational chips */}
         <View style={{ marginHorizontal: 20, marginTop: 14 }}>
           <View
@@ -185,6 +204,132 @@ export default function WalletScreen() {
           </View>
         )}
       </ScrollView>
+    </View>
+  );
+}
+
+const TOPUP_PRESETS = [10000, 20000, 50000, 100000]; // paise → ₹100/200/500/1000
+
+function AddMoneyCard({ onAdded }: { onAdded: () => void }) {
+  const createTopup = useCreateTopup();
+  const verifyTopup = useVerifyTopup();
+  const [amount, setAmount] = useState(TOPUP_PRESETS[1]!); // ₹200 default
+  const busy = createTopup.isPending || verifyTopup.isPending;
+
+  const handleAdd = async () => {
+    try {
+      const order = await createTopup.mutateAsync(amount);
+      const sandbox = order.environment ? order.environment === 'sandbox' : __DEV__;
+      const result = await startCashfreeWebPayment({
+        sessionId: order.paymentSessionId,
+        orderId: order.providerOrderId,
+        sandbox,
+      });
+      const res = await verifyTopup.mutateAsync(order.topupId);
+      if (res.status === 'paid') {
+        onAdded();
+        Alert.alert('Money added', `${formatRupees(res.creditedPaise)} added to your wallet.`);
+        return;
+      }
+      if (!result.ok) {
+        Alert.alert('Payment not completed', result.error?.message ?? 'Please try again.');
+      } else {
+        Alert.alert('Confirming…', "We're confirming your top-up with the bank.");
+      }
+    } catch (e) {
+      const msg =
+        e instanceof Error &&
+        (e.message.includes('CFPaymentGatewayService') ||
+          e.message.includes('Native module') ||
+          e.message.includes('TurboModule'))
+          ? 'Payment requires the TrustNear app build — re-install from the latest build.'
+          : e instanceof Error
+            ? e.message
+            : 'Could not start payment.';
+      Alert.alert('Could not add money', msg);
+    }
+  };
+
+  return (
+    <View style={{ marginHorizontal: 20, marginTop: 14 }}>
+      <View
+        style={{
+          backgroundColor: colors.surface.DEFAULT,
+          borderRadius: 18,
+          padding: 16,
+          borderWidth: 1,
+          borderColor: colors.border.DEFAULT,
+        }}
+      >
+        <Text
+          style={{
+            fontSize: 10,
+            fontWeight: '800',
+            letterSpacing: 1.4,
+            textTransform: 'uppercase',
+            color: colors.brand[700],
+          }}
+        >
+          Add money
+        </Text>
+        <View style={{ marginTop: 12, flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+          {TOPUP_PRESETS.map((p) => {
+            const selected = p === amount;
+            return (
+              <Pressable
+                key={p}
+                onPress={() => setAmount(p)}
+                style={{
+                  paddingVertical: 9,
+                  paddingHorizontal: 16,
+                  borderRadius: 12,
+                  borderWidth: 1.5,
+                  borderColor: selected ? colors.brand[700] : colors.border.DEFAULT,
+                  backgroundColor: selected ? colors.brand[700] : colors.surface.muted,
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: 14,
+                    fontWeight: '800',
+                    color: selected ? '#fff' : colors.ink.DEFAULT,
+                  }}
+                >
+                  {formatRupees(p)}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+        <Pressable
+          onPress={() => void handleAdd()}
+          disabled={busy}
+          style={{
+            marginTop: 14,
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'center',
+            borderRadius: 14,
+            paddingVertical: 13,
+            backgroundColor: colors.accent.DEFAULT,
+            opacity: busy ? 0.6 : 1,
+          }}
+        >
+          {busy ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <>
+              <Ionicons name="add-circle" size={18} color="#fff" />
+              <Text style={{ marginLeft: 8, fontSize: 15, fontWeight: '800', color: '#fff' }}>
+                Add {formatRupees(amount)}
+              </Text>
+            </>
+          )}
+        </Pressable>
+        <Text style={{ marginTop: 8, fontSize: 11, color: colors.ink.subtle, textAlign: 'center' }}>
+          UPI · Card · Netbanking — instantly credited
+        </Text>
+      </View>
     </View>
   );
 }

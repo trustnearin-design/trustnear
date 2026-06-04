@@ -60,6 +60,9 @@ export async function getMyProfile(userId: string) {
       currentAddress: true,
       // Service radius — needed to prefill the post-approval "edit area" map.
       serviceRadiusKm: true,
+      // Portfolio gallery — pro-uploaded "recent work" shots shown on the
+      // customer expert detail screen.
+      portfolioUrls: true,
       user: {
         select: {
           id: true,
@@ -134,6 +137,57 @@ export async function saveProfileDetails(
     },
   });
   return { ok: true };
+}
+
+/** Max portfolio shots a pro can keep — mirrors the admin-side cap. */
+const PORTFOLIO_MAX = 12;
+
+/**
+ * Append a freshly-uploaded portfolio image URL to the pro's gallery.
+ * Available any time (including post-approval) — portfolio shots don't
+ * affect verification, so no re-review is triggered. De-dupes and caps at
+ * {@link PORTFOLIO_MAX}; returns the full updated list.
+ */
+export async function savePortfolioPhoto(
+  userId: string,
+  url: string,
+): Promise<{ ok: true; portfolioUrls: string[] }> {
+  const pro = await prisma.professional.findUnique({
+    where: { userId },
+    select: { id: true, portfolioUrls: true },
+  });
+  if (!pro) {
+    throw new NotFoundError('Professional profile not found for this user');
+  }
+  const next = [url, ...pro.portfolioUrls.filter((u) => u !== url)].slice(0, PORTFOLIO_MAX);
+  await prisma.professional.update({
+    where: { id: pro.id },
+    data: { portfolioUrls: next },
+  });
+  return { ok: true, portfolioUrls: next };
+}
+
+/**
+ * Remove a portfolio image URL from the pro's gallery. Returns the updated
+ * list (no-op-safe if the URL isn't present).
+ */
+export async function removePortfolioPhoto(
+  userId: string,
+  url: string,
+): Promise<{ ok: true; portfolioUrls: string[] }> {
+  const pro = await prisma.professional.findUnique({
+    where: { userId },
+    select: { id: true, portfolioUrls: true },
+  });
+  if (!pro) {
+    throw new NotFoundError('Professional profile not found for this user');
+  }
+  const next = pro.portfolioUrls.filter((u) => u !== url);
+  await prisma.professional.update({
+    where: { id: pro.id },
+    data: { portfolioUrls: next },
+  });
+  return { ok: true, portfolioUrls: next };
 }
 
 /**

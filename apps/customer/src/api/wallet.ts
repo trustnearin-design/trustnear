@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiFetch } from './client';
 
 export type WalletTxnType = 'credit' | 'debit' | 'hold' | 'release' | 'refund';
@@ -42,5 +42,50 @@ export function useWalletTransactions(limit = 50) {
     queryFn: () =>
       apiFetch<{ transactions: WalletTxn[]; count: number }>(`/wallet/transactions?limit=${limit}`),
     staleTime: 15_000,
+  });
+}
+
+// ─── Add money (top-up) ──────────────────────────────────────────────
+
+export interface CreateTopupResult {
+  topupId: string;
+  paymentSessionId: string;
+  providerOrderId: string;
+  amountPaise: number;
+  provider: string;
+  environment?: 'sandbox' | 'production';
+  status: string;
+}
+
+export interface VerifyTopupResult {
+  topupId: string;
+  status: string;
+  alreadyProcessed: boolean;
+  creditedPaise: number;
+}
+
+/** Start an "Add money" order — returns the gateway session to open. */
+export function useCreateTopup() {
+  return useMutation({
+    mutationFn: (amountPaise: number) =>
+      apiFetch<CreateTopupResult>('/wallet/topup', {
+        method: 'POST',
+        body: { amountPaise },
+      }),
+  });
+}
+
+/** Confirm a top-up after the gateway sheet closes. Idempotent. */
+export function useVerifyTopup() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (topupId: string) =>
+      apiFetch<VerifyTopupResult>('/wallet/topup/verify', {
+        method: 'POST',
+        body: { topupId },
+      }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['wallet'] });
+    },
   });
 }

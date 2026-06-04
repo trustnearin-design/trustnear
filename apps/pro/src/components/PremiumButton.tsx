@@ -1,4 +1,5 @@
-import { Pressable, View, Text, ActivityIndicator } from 'react-native';
+import { View, Text, ActivityIndicator } from 'react-native';
+import { AnimatedPressable, usePressScale } from './ui/pressScale';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
@@ -37,10 +38,13 @@ export function PremiumButton({
   const inactive = disabled || loading;
   const enabled = !inactive;
   const baseColor = variant === 'accent' ? colors.accent.DEFAULT : colors.brand.DEFAULT;
+  const press = usePressScale();
   return (
-    <Pressable
+    <AnimatedPressable
       disabled={inactive}
       onPress={onPress}
+      onPressIn={press.onPressIn}
+      onPressOut={press.onPressOut}
       style={
         enabled
           ? {
@@ -49,8 +53,9 @@ export function PremiumButton({
               shadowRadius: 14,
               shadowOffset: { width: 0, height: 6 },
               elevation: 6,
+              transform: [{ scale: press.scale }],
             }
-          : undefined
+          : { transform: [{ scale: press.scale }] }
       }
       className={`flex-row items-center justify-center rounded-card py-4 ${
         variant === 'accent'
@@ -75,7 +80,7 @@ export function PremiumButton({
           ) : null}
         </>
       )}
-    </Pressable>
+    </AnimatedPressable>
   );
 }
 

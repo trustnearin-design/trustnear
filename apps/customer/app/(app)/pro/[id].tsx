@@ -434,8 +434,13 @@ function SectionHeader({
 // ─── Portfolio ──────────────────────────────────────────────────
 
 function PortfolioSection({ pro, expertId }: { pro: ProDetail; expertId: string }) {
+  // Prefer the pro's own uploaded work; fall back to curated category
+  // imagery only while their gallery is empty.
   const slugs = pro.serviceOfferings.map((o) => o.category.slug);
-  const shots = portfolioFor(expertId, slugs);
+  const shots =
+    pro.portfolioUrls && pro.portfolioUrls.length > 0
+      ? pro.portfolioUrls
+      : portfolioFor(expertId, slugs);
   if (shots.length === 0) return null;
   return (
     <View className="mt-6">

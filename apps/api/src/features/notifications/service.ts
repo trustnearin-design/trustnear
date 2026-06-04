@@ -371,3 +371,27 @@ export async function notifyPaymentReceived(args: {
     data: { bookingId: args.bookingId, deepLink: `/booking/${args.bookingId}` },
   });
 }
+
+/**
+ * Referral reward credited — fired for both the referrer and the referee
+ * when the referee completes their first booking.
+ */
+export async function notifyReferralReward(args: {
+  userId: string;
+  amountPaise: number;
+  role: 'referrer' | 'referee';
+}): Promise<void> {
+  const rupees = (args.amountPaise / 100).toFixed(0);
+  const title = `You earned ₹${rupees}! 🎁`;
+  const body =
+    args.role === 'referrer'
+      ? `Aapke dost ne apni pehli service li — ₹${rupees} aapke wallet me add ho gaya.`
+      : `Referral reward! ₹${rupees} aapke wallet me add ho gaya.`;
+  await dispatch({
+    userId: args.userId,
+    type: 'system',
+    title,
+    body,
+    data: { deepLink: '/wallet' },
+  });
+}

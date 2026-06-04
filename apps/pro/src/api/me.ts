@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { apiFetch } from './client';
+import { apiBaseUrl, apiFetch } from './client';
+import { useAuthStore } from '../stores/auth';
 
 /**
  * Pro-side "me" endpoints. The Pro app reads almost everything off these —
@@ -57,6 +58,8 @@ export interface MyProfile {
   languagesSpoken: string[];
   currentAddress: string | null;
   serviceRadiusKm: number;
+  /** Pro-uploaded "recent work" shots shown on the customer expert screen. */
+  portfolioUrls: string[];
   user: {
     id: string;
     fullName: string;
@@ -149,6 +152,60 @@ export function useSaveProfileDetails() {
   return useMutation({
     mutationFn: (data: ProfileDetailsInput) =>
       apiFetch<{ ok: true }>('/pros/me/profile', { method: 'PATCH', body: data }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['pro.me'] });
+    },
+  });
+}
+
+// ─── Portfolio gallery ───────────────────────────────────────────────
+// "Recent work" shots the pro uploads themselves. Upload uses raw fetch
+// (multipart FormData), delete goes through apiFetch (JSON body).
+
+export async function uploadPortfolioPhoto(
+  uri: string,
+  mime = 'image/jpeg',
+): Promise<{ ok: true; portfolioUrls: string[] }> {
+  const token = useAuthStore.getState().accessToken;
+  const form = new FormData();
+  form.append('file', { uri, name: 'work.jpg', type: mime } as unknown as Blob);
+
+  const res = await fetch(`${apiBaseUrl}/api/v1/pros/me/portfolio`, {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: form as unknown as BodyInit_,
+  });
+  const json = (await res.json().catch(() => null)) as
+    | { success: true; data: { ok: true; portfolioUrls: string[] } }
+    | { success: false; error: { code: string; message: string } }
+    | null;
+  if (!json || !json.success) {
+    throw new Error(json && 'error' in json ? json.error.message : `Upload failed (${res.status})`);
+  }
+  return json.data;
+}
+
+export function useUploadPortfolioPhoto() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ uri, mime }: { uri: string; mime?: string }) => uploadPortfolioPhoto(uri, mime),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['pro.me'] });
+    },
+  });
+}
+
+export function useDeletePortfolioPhoto() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (url: string) =>
+      apiFetch<{ ok: true; portfolioUrls: string[] }>('/pros/me/portfolio', {
+        method: 'DELETE',
+        body: { url },
+      }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['pro.me'] });
     },

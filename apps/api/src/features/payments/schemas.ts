@@ -4,6 +4,8 @@ import { UuidSchema } from '@sevalink/types';
 export const CreatePaymentInputSchema = z.object({
   bookingId: UuidSchema,
   customerEmail: z.string().email().optional(),
+  /** Apply the customer's wallet balance to this booking at checkout. */
+  useWallet: z.boolean().optional(),
 });
 
 export const VerifyPaymentInputSchema = z.object({

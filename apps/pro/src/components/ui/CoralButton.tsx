@@ -1,7 +1,8 @@
-import { Pressable, View, Text, ActivityIndicator, ViewStyle } from 'react-native';
+import { View, Text, ActivityIndicator, ViewStyle } from 'react-native';
 import { Gradient } from './Gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../theme/colors';
+import { AnimatedPressable, usePressScale } from './pressScale';
 
 interface CoralButtonProps {
   label: string;
@@ -48,10 +49,13 @@ export function CoralButton({
     </>
   );
 
+  const press = usePressScale();
   return (
-    <Pressable
+    <AnimatedPressable
       disabled={inactive}
       onPress={onPress}
+      onPressIn={press.onPressIn}
+      onPressOut={press.onPressOut}
       style={[
         {
           opacity: inactive ? 0.5 : 1,
@@ -61,6 +65,7 @@ export function CoralButton({
           shadowOffset: { width: 0, height: 8 },
           elevation: 8,
           borderRadius: 18,
+          transform: [{ scale: press.scale }],
         },
         style,
       ]}
@@ -96,7 +101,7 @@ export function CoralButton({
           {inner}
         </Gradient>
       )}
-    </Pressable>
+    </AnimatedPressable>
   );
 }
 
@@ -116,10 +121,13 @@ export function OutlineButton({
   style?: ViewStyle;
 }) {
   const inactive = disabled || loading;
+  const press = usePressScale();
   return (
-    <Pressable
+    <AnimatedPressable
       disabled={inactive}
       onPress={onPress}
+      onPressIn={press.onPressIn}
+      onPressOut={press.onPressOut}
       style={[
         {
           paddingVertical: 15,
@@ -132,6 +140,7 @@ export function OutlineButton({
           alignItems: 'center',
           justifyContent: 'center',
           opacity: inactive ? 0.5 : 1,
+          transform: [{ scale: press.scale }],
         },
         style,
       ]}
@@ -155,6 +164,6 @@ export function OutlineButton({
           </Text>
         </>
       )}
-    </Pressable>
+    </AnimatedPressable>
   );
 }

@@ -1,4 +1,4 @@
-import next from '@sevalink/eslint-config/next.js';
+import next from '@sevalink/eslint-config/next';
 
 export default [
   ...next,

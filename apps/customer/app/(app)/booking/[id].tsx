@@ -11,7 +11,7 @@ import {
   TextInput,
   Alert,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
@@ -35,6 +35,7 @@ import {
 } from '../../../src/lib/format';
 import { ApiCallError } from '../../../src/api/client';
 import { useCreatePaymentOrder, useVerifyPayment } from '../../../src/api/payments';
+import { useWalletBalance } from '../../../src/api/wallet';
 import { REVIEW_TAGS, useSubmitReview, type ReviewTag } from '../../../src/api/reviews';
 import { startCashfreeWebPayment } from '../../../src/lib/cashfree';
 import { colors } from '../../../src/theme/colors';
@@ -507,13 +508,28 @@ function PriceCard({ booking }: { booking: BookingDetail }) {
 function PaymentCard({ booking, onPaid }: { booking: BookingDetail; onPaid: () => void }) {
   const createOrder = useCreatePaymentOrder();
   const verify = useVerifyPayment();
+  const wallet = useWalletBalance();
   const [error, setError] = useState<string | null>(null);
+  const [useWallet, setUseWallet] = useState(true);
   const inFlight = createOrder.isPending || verify.isPending;
+
+  const walletBalance = wallet.data?.walletBalance ?? 0;
+  const hasWallet = walletBalance > 0;
+  const walletApplicable = useWallet ? Math.min(walletBalance, booking.totalAmount) : 0;
+  const payable = booking.totalAmount - walletApplicable;
 
   const handlePay = async () => {
     setError(null);
     try {
-      const order = await createOrder.mutateAsync({ bookingId: booking.id });
+      const order = await createOrder.mutateAsync({ bookingId: booking.id, useWallet });
+      // Wallet covered the whole amount — server already settled it (paymentStatus
+      // is 'paid' before this resolves). Trust it; skip the gateway SDK entirely.
+      if (order.paid) {
+        void verify.mutateAsync(booking.id).catch(() => undefined);
+        void wallet.refetch();
+        onPaid();
+        return;
+      }
       // The SDK environment MUST match where the server minted the session.
       // Trust the server's `environment`; fall back to __DEV__ only if an
       // older API build didn't send it.
@@ -526,6 +542,7 @@ function PaymentCard({ booking, onPaid }: { booking: BookingDetail; onPaid: () =
       // Webhook usually wins the race, but verifying gives us instant UI
       // feedback. Either path ends with paymentStatus === 'paid'.
       const verifyRes = await verify.mutateAsync(booking.id);
+      void wallet.refetch();
       if (verifyRes.status === 'paid') {
         onPaid();
         return;
@@ -561,12 +578,43 @@ function PaymentCard({ booking, onPaid }: { booking: BookingDetail; onPaid: () =
           Payment due
         </Text>
       </View>
-      <Text className="mt-2 text-3xl font-black text-ink-inverse">
-        {formatRupees(booking.totalAmount)}
-      </Text>
+      <Text className="mt-2 text-3xl font-black text-ink-inverse">{formatRupees(payable)}</Text>
       <Text className="mt-1 text-xs text-ink-inverse/80">
-        Service complete. Pay securely via UPI, card, or netbanking.
+        {payable === 0
+          ? 'Fully covered by your wallet — tap to confirm.'
+          : 'Service complete. Pay securely via UPI, card, or netbanking.'}
       </Text>
+
+      {hasWallet ? (
+        <Pressable
+          onPress={() => setUseWallet((v) => !v)}
+          className="mt-3 flex-row items-center justify-between rounded-card bg-white/10 px-3.5 py-3"
+        >
+          <View className="flex-1 flex-row items-center">
+            <Ionicons name="wallet" size={16} color="#fff" />
+            <View className="ml-2.5 flex-1">
+              <Text className="text-sm font-bold text-ink-inverse">Use wallet balance</Text>
+              <Text className="text-[11px] text-ink-inverse/70">
+                {formatRupees(walletBalance)} available
+                {useWallet && walletApplicable > 0
+                  ? ` · −${formatRupees(walletApplicable)} applied`
+                  : ''}
+              </Text>
+            </View>
+          </View>
+          {/* Lightweight toggle pill */}
+          <View
+            className={`h-6 w-11 justify-center rounded-full px-0.5 ${
+              useWallet ? 'bg-accent' : 'bg-white/30'
+            }`}
+          >
+            <View
+              className={`h-5 w-5 rounded-full bg-white ${useWallet ? 'self-end' : 'self-start'}`}
+            />
+          </View>
+        </Pressable>
+      ) : null}
+
       <Pressable
         disabled={inFlight}
         onPress={() => void handlePay()}
@@ -578,9 +626,13 @@ function PaymentCard({ booking, onPaid }: { booking: BookingDetail; onPaid: () =
           <ActivityIndicator color="#fff" />
         ) : (
           <>
-            <Ionicons name="lock-closed" size={16} color="#fff" />
+            <Ionicons
+              name={payable === 0 ? 'checkmark-circle' : 'lock-closed'}
+              size={16}
+              color="#fff"
+            />
             <Text className="ml-2 text-sm font-bold text-ink-inverse">
-              Pay {formatRupees(booking.totalAmount)}
+              {payable === 0 ? 'Confirm with wallet' : `Pay ${formatRupees(payable)}`}
             </Text>
           </>
         )}
@@ -603,6 +655,7 @@ function CancelSheet({
   onConfirm: (reason: string) => Promise<void> | void;
   loading: boolean;
 }) {
+  const insets = useSafeAreaInsets();
   const [reason, setReason] = useState('');
   const valid = reason.trim().length >= 3;
 
@@ -616,7 +669,11 @@ function CancelSheet({
         style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}
         onPress={onClose}
       >
-        <Pressable onPress={() => undefined} className="rounded-t-3xl bg-surface px-5 pb-8 pt-5">
+        <Pressable
+          onPress={() => undefined}
+          className="rounded-t-3xl bg-surface px-5 pt-5"
+          style={{ paddingBottom: insets.bottom + 20 }}
+        >
           <View className="mx-auto mb-4 h-1 w-12 rounded-full bg-border" />
           <Text className="text-lg font-bold text-ink">Cancel booking?</Text>
           <Text className="mt-1 text-sm text-ink-muted">
@@ -719,6 +776,7 @@ function ReviewSheet({
   bookingId: string;
   proName: string;
 }) {
+  const insets = useSafeAreaInsets();
   const [rating, setRating] = useState(0);
   const [tags, setTags] = useState<ReviewTag[]>([]);
   const [text, setText] = useState('');
@@ -773,7 +831,11 @@ function ReviewSheet({
         style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}
         onPress={onClose}
       >
-        <Pressable onPress={() => undefined} className="rounded-t-3xl bg-surface px-5 pb-8 pt-5">
+        <Pressable
+          onPress={() => undefined}
+          className="rounded-t-3xl bg-surface px-5 pt-5"
+          style={{ paddingBottom: insets.bottom + 20 }}
+        >
           <View className="mx-auto mb-4 h-1 w-12 rounded-full bg-border" />
           <Text className="text-center text-lg font-bold text-ink">Rate your experience</Text>
           <Text className="mt-1 text-center text-sm text-ink-muted">with {proName}</Text>

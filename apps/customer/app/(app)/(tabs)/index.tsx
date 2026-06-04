@@ -27,6 +27,7 @@ import {
   PromoBanner,
   ParentCircleRail,
   ParentTabsBar,
+  FadeSlideIn,
 } from '../../../src/components/ui';
 
 /**
@@ -234,22 +235,22 @@ function AllFeed({
   return (
     <View>
       {/* Hero banner carousel */}
-      <View style={{ marginTop: 18 }}>
+      <FadeSlideIn delay={0} style={{ marginTop: 18 }}>
         <BannerSlider placement="home_hero" />
-      </View>
+      </FadeSlideIn>
 
       {/* Trust chips */}
-      <View style={{ marginTop: 18 }}>
+      <FadeSlideIn delay={90} style={{ marginTop: 18 }}>
         <TrustStrip />
-      </View>
+      </FadeSlideIn>
 
       {/* Deal of the day */}
-      <View style={{ marginTop: 24 }}>
+      <FadeSlideIn delay={170} style={{ marginTop: 24 }}>
         <SectionTitle kicker="Limited time" title="Deal of the day" />
         <View style={{ marginTop: 14 }}>
           <DealCardGrid items={dealItems} onPress={onOpenCategory} />
         </View>
-      </View>
+      </FadeSlideIn>
 
       {/* Home cleaning slider */}
       <View style={{ marginTop: 26 }}>

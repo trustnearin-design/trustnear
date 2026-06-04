@@ -6,6 +6,7 @@ import {
   ScrollView,
   RefreshControl,
   Alert,
+  Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
@@ -209,6 +210,9 @@ export default function ProfileScreen() {
         <SectionTitle onEdit={() => router.push('/(app)/edit/location')}>Service area</SectionTitle>
         <ServiceAreaCard profile={profile.data} />
 
+        <SectionTitle onEdit={() => router.push('/(app)/edit/portfolio')}>Recent work</SectionTitle>
+        <PortfolioCard profile={profile.data} onAdd={() => router.push('/(app)/edit/portfolio')} />
+
         <SectionTitle>Verification</SectionTitle>
         <Pressable
           onPress={() => router.push('/(app)/kyc')}
@@ -410,6 +414,59 @@ function ServiceAreaCard({ profile }: { profile: MyProfile | undefined }) {
         </Text>
       </View>
     </View>
+  );
+}
+
+function PortfolioCard({ profile, onAdd }: { profile: MyProfile | undefined; onAdd: () => void }) {
+  if (!profile) return null;
+  const shots = profile.portfolioUrls ?? [];
+  if (shots.length === 0) {
+    return (
+      <Pressable
+        onPress={onAdd}
+        className="mx-5 mt-2 flex-row items-center rounded-card border border-dashed border-border bg-surface p-4"
+      >
+        <View className="mr-3 h-9 w-9 items-center justify-center rounded-full bg-brand-50">
+          <Ionicons name="images" size={16} color={colors.brand.DEFAULT} />
+        </View>
+        <View className="flex-1">
+          <Text className="text-[14px] font-bold text-ink">Add your work photos</Text>
+          <Text className="text-[11px] text-ink-subtle">
+            Customers book 2× more when they see real work. Tap to upload.
+          </Text>
+        </View>
+        <Ionicons name="add-circle" size={22} color={colors.brand.DEFAULT} />
+      </Pressable>
+    );
+  }
+  return (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 8, gap: 10 }}
+    >
+      {shots.map((uri) => (
+        <Image
+          key={uri}
+          source={{ uri }}
+          style={{
+            width: 110,
+            height: 140,
+            borderRadius: 14,
+            backgroundColor: colors.surface.muted,
+          }}
+          resizeMode="cover"
+        />
+      ))}
+      <Pressable
+        onPress={onAdd}
+        style={{ width: 110, height: 140, borderRadius: 14 }}
+        className="items-center justify-center border border-dashed border-border bg-surface"
+      >
+        <Ionicons name="add" size={26} color={colors.brand.DEFAULT} />
+        <Text className="mt-1 text-[11px] font-semibold text-brand">Add</Text>
+      </Pressable>
+    </ScrollView>
   );
 }
 

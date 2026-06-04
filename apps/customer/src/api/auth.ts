@@ -26,7 +26,12 @@ export function useSendOtp() {
 
 export function useVerifyOtp() {
   return useMutation({
-    mutationFn: async (input: { phone: string; otp: string; fullName?: string }) => {
+    mutationFn: async (input: {
+      phone: string;
+      otp: string;
+      fullName?: string;
+      referralCode?: string;
+    }) => {
       const data = await apiFetch<VerifyOtpResponse>('/auth/verify-otp', {
         method: 'POST',
         body: {
@@ -34,6 +39,7 @@ export function useVerifyOtp() {
           otp: input.otp,
           role: 'customer',
           ...(input.fullName ? { fullName: input.fullName } : {}),
+          ...(input.referralCode ? { referralCode: input.referralCode } : {}),
         },
         auth: false,
       });

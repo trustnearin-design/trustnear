@@ -1,18 +1,20 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ComponentRef } from 'react';
 import {
   View,
   Text,
-  Pressable,
   Image,
-  ScrollView,
+  Animated,
   Linking,
   Dimensions,
+  type ScrollView,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useBanners, type Banner } from '../api/banners';
 import { colors } from '../theme/colors';
+import { Gradient } from './ui/Gradient';
+import { AnimatedPressable, usePressScale } from './ui/pressScale';
 
 const SCREEN_W = Dimensions.get('window').width;
 const SLIDE_W = SCREEN_W - 40; // 20px padding each side
@@ -28,7 +30,8 @@ const AUTO_ROTATE_MS = 5000;
 export function BannerSlider({ placement = 'home_hero' }: { placement?: Banner['placement'] }) {
   const router = useRouter();
   const banners = useBanners(placement);
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<ComponentRef<typeof Animated.ScrollView>>(null);
+  const scrollX = useRef(new Animated.Value(0)).current;
   const [active, setActive] = useState(0);
 
   const list = banners.data ?? [];
@@ -39,7 +42,7 @@ export function BannerSlider({ placement = 'home_hero' }: { placement?: Banner['
     const handle = setInterval(() => {
       setActive((prev) => {
         const next = (prev + 1) % list.length;
-        scrollRef.current?.scrollTo({ x: next * SLIDE_W, animated: true });
+        (scrollRef.current as ScrollView | null)?.scrollTo({ x: next * SLIDE_W, animated: true });
         return next;
       });
     }, AUTO_ROTATE_MS);
@@ -77,7 +80,7 @@ export function BannerSlider({ placement = 'home_hero' }: { placement?: Banner['
 
   return (
     <View className="mt-5">
-      <ScrollView
+      <Animated.ScrollView
         ref={scrollRef}
         horizontal
         pagingEnabled
@@ -85,12 +88,16 @@ export function BannerSlider({ placement = 'home_hero' }: { placement?: Banner['
         snapToInterval={SLIDE_W}
         decelerationRate="fast"
         contentContainerStyle={{ paddingHorizontal: 20 }}
+        scrollEventThrottle={16}
+        onScroll={Animated.event([{ nativeEvent: { contentOffset: { x: scrollX } } }], {
+          useNativeDriver: true,
+        })}
         onMomentumScrollEnd={onScroll}
       >
-        {list.map((b) => (
-          <Slide key={b.id} banner={b} onPress={() => handleTap(b)} />
+        {list.map((b, i) => (
+          <Slide key={b.id} banner={b} index={i} scrollX={scrollX} onPress={() => handleTap(b)} />
         ))}
-      </ScrollView>
+      </Animated.ScrollView>
 
       {list.length > 1 && (
         <View className="mt-3 flex-row items-center justify-center">
@@ -113,17 +120,45 @@ export function BannerSlider({ placement = 'home_hero' }: { placement?: Banner['
   );
 }
 
-function Slide({ banner, onPress }: { banner: Banner; onPress: () => void }) {
+function Slide({
+  banner,
+  index,
+  scrollX,
+  onPress,
+}: {
+  banner: Banner;
+  index: number;
+  scrollX: Animated.Value;
+  onPress: () => void;
+}) {
+  const press = usePressScale(0.97);
+  // Carousel depth — the centred slide is full size, neighbours shrink
+  // slightly so the active banner pops (Yes Madam / Swiggy hero feel).
+  const inputRange = [(index - 1) * SLIDE_W, index * SLIDE_W, (index + 1) * SLIDE_W];
+  const focusScale = scrollX.interpolate({
+    inputRange,
+    outputRange: [0.93, 1, 0.93],
+    extrapolate: 'clamp',
+  });
+  const dim = scrollX.interpolate({
+    inputRange,
+    outputRange: [0.5, 0, 0.5],
+    extrapolate: 'clamp',
+  });
+  const hasText = banner.title || banner.subtitle || banner.ctaText;
   return (
-    <Pressable
+    <AnimatedPressable
       onPress={onPress}
+      onPressIn={press.onPressIn}
+      onPressOut={press.onPressOut}
       disabled={banner.linkKind === 'none'}
       style={{
         width: SLIDE_W,
         height: SLIDE_H,
-        borderRadius: 16,
+        borderRadius: 20,
         overflow: 'hidden',
         backgroundColor: colors.brand[100],
+        transform: [{ scale: Animated.multiply(focusScale, press.scale) }],
       }}
     >
       <Image
@@ -131,18 +166,33 @@ function Slide({ banner, onPress }: { banner: Banner; onPress: () => void }) {
         style={{ width: '100%', height: '100%' }}
         resizeMode="cover"
       />
-      {/* Bottom-weighted overlay for text legibility — only shown when there
-          IS text. Pure-image banners (full-bleed photos) skip the overlay. */}
-      {(banner.title || banner.subtitle || banner.ctaText) && (
+      {/* Inactive slides dim slightly so the focused one reads as "live". */}
+      <Animated.View
+        pointerEvents="none"
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: '#000',
+          opacity: dim,
+        }}
+      />
+      {/* Premium bottom gradient for text legibility — only when there IS
+          text. Pure-image banners (full-bleed photos) skip it. */}
+      {hasText && (
         <>
-          <View
+          <Gradient
+            colors={['rgba(11,31,58,0)', 'rgba(11,31,58,0.72)']}
+            start={{ x: 0.5, y: 0 }}
+            end={{ x: 0.5, y: 1 }}
             style={{
               position: 'absolute',
-              top: 0,
               left: 0,
               right: 0,
               bottom: 0,
-              backgroundColor: 'rgba(11,31,58,0.42)',
+              height: SLIDE_H * 0.7,
             }}
           />
           <View className="absolute inset-0 flex-1 justify-end p-5">
@@ -170,6 +220,6 @@ function Slide({ banner, onPress }: { banner: Banner; onPress: () => void }) {
           </View>
         </>
       )}
-    </Pressable>
+    </AnimatedPressable>
   );
 }

@@ -122,6 +122,8 @@ export interface ProDetail {
   repeatClientCount: number;
   avgResponseTimeSeconds: number;
   subscriptionPlan: string | null;
+  /** Pro-uploaded "recent work" shots. Empty until the pro adds any. */
+  portfolioUrls: string[];
   user: {
     id: string;
     fullName: string;

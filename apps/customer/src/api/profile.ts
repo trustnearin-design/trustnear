@@ -39,6 +39,8 @@ export interface UpdateProfileInput {
   city?: string;
   area?: string;
   preferredLang?: string;
+  latitude?: number;
+  longitude?: number;
 }
 
 export function useUpdateProfile() {

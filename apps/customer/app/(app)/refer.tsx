@@ -50,9 +50,12 @@ export default function ReferScreen() {
               className="mt-1 text-center text-[13px]"
               style={{ color: 'rgba(255,255,255,0.9)' }}
             >
-              Apne doston ko TrustNear pe invite karein. Dono ko reward milega jab woh apni pehli
-              service book karein.
+              Aap ₹150 paayein, dost ₹50 paaye — jab woh apni pehli service complete karein.
             </Text>
+            <View className="mt-4 flex-row" style={{ gap: 10 }}>
+              <RewardPill label="You get" amount="₹150" />
+              <RewardPill label="They get" amount="₹50" />
+            </View>
           </View>
         </SafeAreaView>
       </Gradient>
@@ -91,9 +94,23 @@ export default function ReferScreen() {
         <Step
           n={3}
           title="Both earn"
-          body="Unki pehli service complete hone pe dono ko wallet reward milta hai."
+          body="Unki pehli service complete hone pe ₹150 aapke aur ₹50 unke wallet me add ho jata hai."
         />
       </ScrollView>
+    </View>
+  );
+}
+
+function RewardPill({ label, amount }: { label: string; amount: string }) {
+  return (
+    <View
+      className="flex-1 items-center rounded-card py-3"
+      style={{ backgroundColor: 'rgba(255,255,255,0.18)' }}
+    >
+      <Text className="text-[11px] font-semibold" style={{ color: 'rgba(255,255,255,0.9)' }}>
+        {label}
+      </Text>
+      <Text className="mt-0.5 text-[20px] font-extrabold text-white">{amount}</Text>
     </View>
   );
 }

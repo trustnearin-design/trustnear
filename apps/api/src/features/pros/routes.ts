@@ -23,6 +23,8 @@ import {
   getMyJobs,
   getMyProfile,
   getMyTodaySummary,
+  removePortfolioPhoto,
+  savePortfolioPhoto,
   saveProfileDetails,
   setMyAvailability,
 } from './me-service.js';
@@ -166,6 +168,44 @@ pros.put(
     const user = c.get('user');
     const { url } = c.req.valid('json');
     const result = await savePhoto(user.sub, url);
+    return success(c, result);
+  },
+);
+
+/**
+ * POST /api/v1/pros/me/portfolio — multipart/form-data, field "file".
+ * Uploads one "recent work" shot to S3 and appends the URL to the pro's
+ * portfolio gallery. Available post-approval (no re-review). Returns the
+ * full updated list.
+ */
+pros.post('/me/portfolio', authenticate, authorize('professional'), async (c) => {
+  const user = c.get('user');
+  const formData = await c.req.formData().catch(() => null);
+  const file = formData?.get('file');
+  if (!file || !(file instanceof File)) {
+    throw new DomainError(
+      ErrorCode.SL_900_VALIDATION_ERROR,
+      'Missing file in form data (field "file")',
+    );
+  }
+  const origin = new URL(c.req.url).origin;
+  const upload = await saveUpload({ file, folder: 'pro-portfolio', publicBaseUrl: origin });
+  const result = await savePortfolioPhoto(user.sub, upload.url);
+  return success(c, { ...result, backend: upload.backend });
+});
+
+/**
+ * DELETE /api/v1/pros/me/portfolio — remove a single portfolio shot by URL.
+ */
+pros.delete(
+  '/me/portfolio',
+  authenticate,
+  authorize('professional'),
+  validator('json', PhotoConfirmSchema),
+  async (c) => {
+    const user = c.get('user');
+    const { url } = c.req.valid('json');
+    const result = await removePortfolioPhoto(user.sub, url);
     return success(c, result);
   },
 );

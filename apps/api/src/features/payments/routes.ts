@@ -35,6 +35,7 @@ payments.post(
       bookingId: input.bookingId,
       customerId: user.sub,
       ...(input.customerEmail ? { customerEmail: input.customerEmail } : {}),
+      ...(input.useWallet !== undefined ? { useWallet: input.useWallet } : {}),
     });
     return success(c, result, undefined, 201);
   },

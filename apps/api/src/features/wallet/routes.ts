@@ -1,14 +1,24 @@
 import { Hono } from 'hono';
+import { z } from 'zod';
 import { prisma } from '@sevalink/db';
 import { NotFoundError } from '@sevalink/types';
 import { authenticate, type AuthContext } from '../../middleware/authenticate.js';
+import { idempotency } from '../../middleware/idempotency.js';
 import { validator } from '../../shared/validator.js';
 import { success } from '../../shared/responses.js';
 import { WalletQuerySchema } from '../payments/schemas.js';
+import { createWalletTopup, reconcileWalletTopup } from './topup-service.js';
 
 const wallet = new Hono<AuthContext>();
 
 wallet.use('*', authenticate);
+
+const TopupCreateSchema = z.object({
+  amountPaise: z.number().int().positive(),
+});
+const TopupVerifySchema = z.object({
+  topupId: z.string().uuid(),
+});
 
 /**
  * GET /api/v1/wallet/balance — own wallet balance + loyalty points.
@@ -24,6 +34,29 @@ wallet.get('/balance', async (c) => {
     walletBalance: row.walletBalance, // paise
     loyaltyPoints: row.loyaltyPoints,
   });
+});
+
+/**
+ * POST /api/v1/wallet/topup — start an "Add money" order. Returns the gateway
+ * SDK session the app opens (UPI / card / netbanking). Crediting happens on
+ * verify + webhook, never here.
+ */
+wallet.post('/topup', idempotency, validator('json', TopupCreateSchema), async (c) => {
+  const user = c.get('user');
+  const { amountPaise } = c.req.valid('json');
+  const result = await createWalletTopup({ userId: user.sub, amountPaise });
+  return success(c, result, undefined, 201);
+});
+
+/**
+ * POST /api/v1/wallet/topup/verify — defensive client check after the gateway
+ * sheet closes. Idempotent; credits the wallet at most once.
+ */
+wallet.post('/topup/verify', validator('json', TopupVerifySchema), async (c) => {
+  const user = c.get('user');
+  const { topupId } = c.req.valid('json');
+  const result = await reconcileWalletTopup({ topupId, callerId: user.sub });
+  return success(c, { topupId, ...result });
 });
 
 /**

@@ -22,6 +22,7 @@ import {
   notifyBookingCompleted,
   notifyBookingEnRoute,
   notifyBookingMatched,
+  notifyReferralReward,
   notifyServiceStarted,
 } from '../notifications/service.js';
 import { calculatePrice } from './pricing.js';
@@ -511,6 +512,14 @@ async function applyTransitionTrustEffects(
   }
 
   if (newStatus === 'completed') {
+    // Credit referral rewards if this is the customer's first completed
+    // booking and they signed up with someone's code. Best-effort.
+    await maybeCreditReferralReward(prevBooking.id, prevBooking.customerId).catch(
+      (err: unknown) => {
+        logger.error({ err, bookingId: prevBooking.id }, 'referral: reward credit failed');
+      },
+    );
+
     // Increment totalBookings + maybe repeat
     await prisma.professional.update({
       where: { id: proId },
@@ -569,6 +578,88 @@ async function applyTransitionTrustEffects(
       bookingId: prevBooking.id,
     });
   }
+}
+
+/** Referral reward amounts (paise). Referrer ₹150, referee ₹50. */
+const REFERRER_REWARD_PAISE = 15000;
+const REFEREE_REWARD_PAISE = 5000;
+
+/**
+ * Credit referral rewards to both sides on the referee's FIRST completed
+ * booking. No-op if the customer wasn't referred, this isn't their first
+ * completed booking, or a reward was already issued. Idempotent via an
+ * existing referral_reward wallet transaction check (no schema flag needed).
+ */
+async function maybeCreditReferralReward(bookingId: string, customerId: string): Promise<void> {
+  const referee = await prisma.user.findUnique({
+    where: { id: customerId },
+    select: { id: true, referredById: true },
+  });
+  if (!referee?.referredById) return;
+
+  // Only the FIRST completed booking qualifies. The booking is already marked
+  // 'completed' in the DB at this point, so a count of 1 means it's the first.
+  const completedCount = await prisma.booking.count({
+    where: { customerId, status: 'completed' },
+  });
+  if (completedCount !== 1) return;
+
+  // Idempotency: bail if the referee already received a referral reward.
+  const already = await prisma.walletTransaction.findFirst({
+    where: { userId: customerId, reason: 'referral_reward' },
+    select: { id: true },
+  });
+  if (already) return;
+
+  const referrerId = referee.referredById;
+  await prisma.$transaction(async (tx) => {
+    const refereeRow = await tx.user.update({
+      where: { id: customerId },
+      data: { walletBalance: { increment: REFEREE_REWARD_PAISE } },
+      select: { walletBalance: true },
+    });
+    await tx.walletTransaction.create({
+      data: {
+        userId: customerId,
+        type: 'credit',
+        reason: 'referral_reward',
+        amount: REFEREE_REWARD_PAISE,
+        balanceAfter: refereeRow.walletBalance,
+        referenceId: bookingId,
+        metadata: { role: 'referee' } as Prisma.InputJsonValue,
+      },
+    });
+
+    const referrerRow = await tx.user.update({
+      where: { id: referrerId },
+      data: { walletBalance: { increment: REFERRER_REWARD_PAISE } },
+      select: { walletBalance: true },
+    });
+    await tx.walletTransaction.create({
+      data: {
+        userId: referrerId,
+        type: 'credit',
+        reason: 'referral_reward',
+        amount: REFERRER_REWARD_PAISE,
+        balanceAfter: referrerRow.walletBalance,
+        referenceId: bookingId,
+        metadata: { role: 'referrer', refereeId: customerId } as Prisma.InputJsonValue,
+      },
+    });
+  });
+
+  logger.info({ bookingId, customerId, referrerId }, 'referral: rewards credited');
+
+  void notifyReferralReward({
+    userId: customerId,
+    amountPaise: REFEREE_REWARD_PAISE,
+    role: 'referee',
+  }).catch(() => undefined);
+  void notifyReferralReward({
+    userId: referrerId,
+    amountPaise: REFERRER_REWARD_PAISE,
+    role: 'referrer',
+  }).catch(() => undefined);
 }
 
 async function updateAvgResponseTime(proId: string, matchedAt: Date): Promise<void> {

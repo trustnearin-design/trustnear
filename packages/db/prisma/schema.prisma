@@ -274,6 +274,7 @@ model User {
   chatMessages      ChatMessage[]
   notifications     Notification[]
   walletTxns        WalletTransaction[]
+  walletTopups      WalletTopup[]
   supportTickets    SupportTicket[]
   auditLogs         AuditLog[]
   savedAddresses    SavedAddress[]
@@ -514,6 +515,10 @@ model Booking {
   // Payment
   paymentStatus       PaymentStatus   @default(pending) @map("payment_status")
   paymentMethod       PaymentMethod?  @map("payment_method")
+  // Wallet balance applied at checkout (paise). The gateway is only charged
+  // totalAmount - walletApplied; the wallet portion is debited atomically
+  // when the booking is marked paid.
+  walletApplied       Int             @default(0) @map("wallet_applied")
   razorpayOrderId     String?         @map("razorpay_order_id") @db.VarChar(100)
   razorpayPaymentId   String?         @map("razorpay_payment_id") @db.VarChar(100)
 
@@ -647,6 +652,29 @@ model WalletTransaction {
   @@index([userId, createdAt(sort: Desc)])
   @@index([referenceId])
   @@map("wallet_transactions")
+}
+
+/**
+ * Wallet top-up order. One row per "Add money" attempt. Mirrors the booking
+ * payment pattern: a pending row is created at order time (binds user +
+ * amount + gateway order id), then verify/webhook flip it to `paid` and
+ * credit the wallet atomically. The `status` guard makes crediting idempotent
+ * across the verify ↔ webhook race.
+ */
+model WalletTopup {
+  id                String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId            String        @map("user_id") @db.Uuid
+  amountPaise       Int           @map("amount_paise")
+  status            PaymentStatus @default(pending)
+  providerOrderId   String?       @map("provider_order_id") @db.VarChar(100)
+  providerPaymentId String?       @map("provider_payment_id") @db.VarChar(100)
+  createdAt         DateTime      @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt         DateTime      @updatedAt @map("updated_at") @db.Timestamptz()
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("wallet_topups")
 }
 
 model PromoCode {

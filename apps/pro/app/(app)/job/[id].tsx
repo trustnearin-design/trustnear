@@ -577,6 +577,7 @@ function OtpEntrySheet({
   onSubmit: (otp: string) => Promise<void> | void;
   loading: boolean;
 }) {
+  const insets = useSafeAreaInsets();
   const [otp, setOtp] = useState('');
   const valid = /^\d{6}$/.test(otp);
 
@@ -590,7 +591,11 @@ function OtpEntrySheet({
           style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}
           onPress={onClose}
         >
-          <Pressable onPress={() => undefined} className="rounded-t-3xl bg-surface px-5 pb-8 pt-5">
+          <Pressable
+            onPress={() => undefined}
+            className="rounded-t-3xl bg-surface px-5 pt-5"
+            style={{ paddingBottom: insets.bottom + 20 }}
+          >
             <View className="mx-auto mb-4 h-1 w-12 rounded-full bg-border" />
             <Text className="text-lg font-bold text-ink">Enter customer&apos;s OTP</Text>
             <Text className="mt-1 text-sm text-ink-muted">
@@ -653,6 +658,7 @@ function CancelSheet({
   onConfirm: (reason: string) => Promise<void> | void;
   loading: boolean;
 }) {
+  const insets = useSafeAreaInsets();
   const [reason, setReason] = useState('');
   const valid = reason.trim().length >= 3;
 
@@ -662,7 +668,11 @@ function CancelSheet({
         style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}
         onPress={onClose}
       >
-        <Pressable onPress={() => undefined} className="rounded-t-3xl bg-surface px-5 pb-8 pt-5">
+        <Pressable
+          onPress={() => undefined}
+          className="rounded-t-3xl bg-surface px-5 pt-5"
+          style={{ paddingBottom: insets.bottom + 20 }}
+        >
           <View className="mx-auto mb-4 h-1 w-12 rounded-full bg-border" />
           <Text className="text-lg font-bold text-ink">Cancel this job?</Text>
           <Text className="mt-1 text-sm text-ink-muted">

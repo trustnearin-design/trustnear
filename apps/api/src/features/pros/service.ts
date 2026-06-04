@@ -166,6 +166,7 @@ export async function getProDetail(professionalId: string) {
       repeatClientCount: true,
       avgResponseTimeSeconds: true,
       subscriptionPlan: true,
+      portfolioUrls: true,
       user: {
         select: {
           id: true,

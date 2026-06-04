@@ -9,23 +9,35 @@ import {
 import { logger } from '../../logger.js';
 import { notifyPaymentReceived } from '../notifications/service.js';
 import { getPaymentProvider } from './factory.js';
+import { isWalletTopupOrder, reconcileWalletTopup } from '../wallet/topup-service.js';
 import type { WebhookEvent } from './provider.js';
 
 export interface CreatePaymentInput {
   bookingId: string;
   customerId: string;
   customerEmail?: string;
+  /** Apply the customer's wallet balance to this booking. */
+  useWallet?: boolean;
 }
 
 export interface CreatePaymentResult {
   bookingId: string;
   paymentSessionId: string;
   providerOrderId: string;
+  /** Amount the gateway will charge (total − walletApplied). 0 if fully paid by wallet. */
   amountPaise: number;
   provider: string;
   /** Gateway environment — the client opens its SDK in this same env. */
   environment: 'sandbox' | 'production';
   status: string;
+  /** Wallet balance applied to this booking (paise). */
+  walletApplied: number;
+  /**
+   * True when the wallet covered the full amount and the booking was settled
+   * immediately — the client should SKIP opening the gateway SDK and just
+   * confirm. False means open the payment sheet for `amountPaise`.
+   */
+  paid: boolean;
 }
 
 /**
@@ -46,10 +58,11 @@ export async function createPaymentForBooking(
       bookingNumber: true,
       customerId: true,
       totalAmount: true,
+      walletApplied: true,
       paymentStatus: true,
       razorpayOrderId: true,
       status: true,
-      customer: { select: { fullName: true, phone: true, email: true } },
+      customer: { select: { fullName: true, phone: true, email: true, walletBalance: true } },
     },
   });
   if (!booking) {
@@ -72,11 +85,50 @@ export async function createPaymentForBooking(
     throw new DomainError(ErrorCode.SL_906_BAD_REQUEST, 'Booking total is zero', 400);
   }
 
+  // Decide how much wallet to apply. On a retry (order already minted, still
+  // pending) keep the originally-applied amount stable so the gateway amount
+  // matches the existing order; otherwise compute from the live balance.
+  const isRetry = !!booking.razorpayOrderId && booking.paymentStatus === 'pending';
+  const walletToUse = isRetry
+    ? booking.walletApplied
+    : input.useWallet
+      ? Math.min(booking.customer.walletBalance, booking.totalAmount)
+      : 0;
+  const gatewayAmount = booking.totalAmount - walletToUse;
+
+  if (!isRetry && walletToUse !== booking.walletApplied) {
+    await prisma.booking.update({
+      where: { id: booking.id },
+      data: { walletApplied: walletToUse },
+    });
+  }
+
+  // Wallet covers the whole amount — settle immediately, no gateway round-trip.
+  if (gatewayAmount <= 0) {
+    await settleFullyFromWallet({
+      bookingId: booking.id,
+      customerId: booking.customerId,
+      bookingNumber: booking.bookingNumber,
+      walletToUse,
+    });
+    return {
+      bookingId: booking.id,
+      paymentSessionId: '',
+      providerOrderId: '',
+      amountPaise: 0,
+      provider: 'wallet',
+      environment: 'production', // unused when paid=true
+      status: 'PAID',
+      walletApplied: walletToUse,
+      paid: true,
+    };
+  }
+
   const provider = await getPaymentProvider();
   const order = await provider.createOrder({
     bookingId: booking.id,
     bookingNumber: booking.bookingNumber,
-    amountPaise: booking.totalAmount,
+    amountPaise: gatewayAmount,
     customer: {
       id: booking.customerId,
       name: booking.customer.fullName,
@@ -103,6 +155,7 @@ export async function createPaymentForBooking(
       provider: order.provider,
       providerOrderId: order.providerOrderId,
       amount: order.amountPaise,
+      walletApplied: walletToUse,
     },
     'payments: order created',
   );
@@ -115,7 +168,69 @@ export async function createPaymentForBooking(
     provider: order.provider,
     environment: order.environment,
     status: order.status,
+    walletApplied: walletToUse,
+    paid: false,
   };
+}
+
+/**
+ * Settle a booking entirely from the customer's wallet — no gateway. Atomic:
+ * debit the wallet, write the ledger row, and mark the booking paid together.
+ * Idempotent via the in-transaction paymentStatus re-check.
+ */
+async function settleFullyFromWallet(args: {
+  bookingId: string;
+  customerId: string;
+  bookingNumber: string;
+  walletToUse: number;
+}): Promise<void> {
+  await prisma.$transaction(async (tx) => {
+    const fresh = await tx.booking.findUnique({
+      where: { id: args.bookingId },
+      select: { paymentStatus: true },
+    });
+    if (!fresh || fresh.paymentStatus === 'paid') return;
+
+    const current = await tx.user.findUnique({
+      where: { id: args.customerId },
+      select: { walletBalance: true },
+    });
+    const debit = Math.min(args.walletToUse, current?.walletBalance ?? 0);
+    const updated = await tx.user.update({
+      where: { id: args.customerId },
+      data: { walletBalance: { decrement: debit } },
+      select: { walletBalance: true },
+    });
+    await tx.booking.update({
+      where: { id: args.bookingId },
+      data: { paymentStatus: 'paid', paymentMethod: 'sevalink_wallet', walletApplied: debit },
+    });
+    await tx.walletTransaction.create({
+      data: {
+        userId: args.customerId,
+        type: 'debit',
+        reason: 'booking_payment',
+        amount: debit,
+        balanceAfter: updated.walletBalance,
+        referenceId: args.bookingId,
+        metadata: { source: 'wallet', fullCoverage: true } as Prisma.InputJsonValue,
+      },
+    });
+  });
+
+  logger.info(
+    { bookingId: args.bookingId, walletApplied: args.walletToUse },
+    'payments: booking settled fully from wallet',
+  );
+
+  void notifyPaymentReceived({
+    customerId: args.customerId,
+    bookingId: args.bookingId,
+    bookingNumber: args.bookingNumber,
+    amountPaise: args.walletToUse,
+  }).catch((err: unknown) => {
+    logger.error({ err, bookingId: args.bookingId }, 'notify: wallet-settle dispatch failed');
+  });
 }
 
 /**
@@ -197,10 +312,38 @@ async function markBookingPaid(args: {
     // Re-check inside the transaction to win any race vs. webhook ↔ verify
     const fresh = await tx.booking.findUnique({
       where: { id: args.bookingId },
-      select: { paymentStatus: true },
+      select: { paymentStatus: true, walletApplied: true },
     });
     if (!fresh || fresh.paymentStatus === 'paid') {
       return; // someone else already processed it
+    }
+
+    // If wallet was applied at checkout, debit that portion now (atomically
+    // with marking the booking paid). The gateway charged only the remainder.
+    let balanceAfter = 0;
+    if (fresh.walletApplied > 0) {
+      const current = await tx.user.findUnique({
+        where: { id: args.customerId },
+        select: { walletBalance: true },
+      });
+      const walletDebit = Math.min(fresh.walletApplied, current?.walletBalance ?? 0);
+      const updated = await tx.user.update({
+        where: { id: args.customerId },
+        data: { walletBalance: { decrement: walletDebit } },
+        select: { walletBalance: true },
+      });
+      balanceAfter = updated.walletBalance;
+      await tx.walletTransaction.create({
+        data: {
+          userId: args.customerId,
+          type: 'debit',
+          reason: 'booking_payment',
+          amount: walletDebit,
+          balanceAfter,
+          referenceId: args.bookingId,
+          metadata: { source: 'wallet' } as Prisma.InputJsonValue,
+        },
+      });
     }
 
     const mappedMethod = args.paymentMethod ? mapPaymentMethod(args.paymentMethod) : undefined;
@@ -213,24 +356,28 @@ async function markBookingPaid(args: {
       },
     });
 
-    // Ledger: customer "debit" representing their out-of-wallet spend.
-    // We DO NOT touch user.walletBalance — money came from outside.
-    // This row exists purely for the audit trail / transactions screen.
-    await tx.walletTransaction.create({
-      data: {
-        userId: args.customerId,
-        type: 'debit',
-        reason: 'booking_payment',
-        amount: args.amountPaise,
-        balanceAfter: 0, // not a wallet-balance-affecting txn
-        referenceId: args.bookingId,
-        metadata: {
-          providerPaymentId: args.providerPaymentId ?? null,
-          paymentMethod: args.paymentMethod ?? null,
-          processedVia: args.fromWebhook ? 'webhook' : 'verify',
-        } as Prisma.InputJsonValue,
-      },
-    });
+    // Ledger: customer "debit" representing the gateway-paid (out-of-wallet)
+    // portion. We DO NOT touch user.walletBalance for this — money came from
+    // outside. Row exists purely for the audit trail / transactions screen.
+    const externalPaid = args.amountPaise - fresh.walletApplied;
+    if (externalPaid > 0) {
+      await tx.walletTransaction.create({
+        data: {
+          userId: args.customerId,
+          type: 'debit',
+          reason: 'booking_payment',
+          amount: externalPaid,
+          balanceAfter, // wallet balance unchanged by the gateway portion
+          referenceId: args.bookingId,
+          metadata: {
+            source: 'gateway',
+            providerPaymentId: args.providerPaymentId ?? null,
+            paymentMethod: args.paymentMethod ?? null,
+            processedVia: args.fromWebhook ? 'webhook' : 'verify',
+          } as Prisma.InputJsonValue,
+        },
+      });
+    }
   });
 
   logger.info(
@@ -295,10 +442,30 @@ export async function handleWebhookEvent(event: WebhookEvent): Promise<void> {
     return;
   }
 
+  // Wallet top-up orders share the gateway webhook. The order_id is a
+  // WalletTopup id (not a Booking id), so route those to the topup reconciler.
+  if (
+    (event.type === 'payment.captured' || event.type === 'payment.failed') &&
+    (await isWalletTopupOrder(event.bookingId))
+  ) {
+    await reconcileWalletTopup({
+      topupId: event.bookingId,
+      fromWebhook: true,
+      providerPaymentIdOverride: event.providerPaymentId,
+    });
+    return;
+  }
+
   if (event.type === 'payment.captured') {
     const booking = await prisma.booking.findUnique({
       where: { id: event.bookingId },
-      select: { id: true, customerId: true, totalAmount: true, paymentStatus: true },
+      select: {
+        id: true,
+        customerId: true,
+        totalAmount: true,
+        walletApplied: true,
+        paymentStatus: true,
+      },
     });
     if (!booking) {
       logger.warn({ event }, 'payments: webhook for unknown booking');
@@ -308,10 +475,13 @@ export async function handleWebhookEvent(event: WebhookEvent): Promise<void> {
       logger.info({ bookingId: booking.id }, 'payments: webhook replay (already paid)');
       return;
     }
-    if (event.amountPaise > 0 && event.amountPaise !== booking.totalAmount) {
+    // The gateway only charged the non-wallet remainder, so compare against
+    // that — not the full total.
+    const expectedGateway = booking.totalAmount - booking.walletApplied;
+    if (event.amountPaise > 0 && event.amountPaise !== expectedGateway) {
       // Defense-in-depth: don't mark paid if amounts disagree
       logger.error(
-        { bookingId: booking.id, expected: booking.totalAmount, got: event.amountPaise },
+        { bookingId: booking.id, expected: expectedGateway, got: event.amountPaise },
         'payments: webhook amount mismatch — refusing to mark paid',
       );
       return;

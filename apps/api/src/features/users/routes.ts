@@ -57,6 +57,8 @@ const UpdateProfileSchema = z
     city: z.string().trim().min(2).max(50).optional(),
     area: z.string().trim().min(2).max(100).optional(),
     preferredLang: z.string().trim().min(2).max(5).optional(),
+    latitude: z.number().min(-90).max(90).optional(),
+    longitude: z.number().min(-180).max(180).optional(),
   })
   .refine((v) => Object.keys(v).length > 0, { message: 'No fields to update' });
 
@@ -82,6 +84,8 @@ users.patch('/me', authenticate, validator('json', UpdateProfileSchema), async (
       ...(data.city !== undefined ? { city: data.city } : {}),
       ...(data.area !== undefined ? { area: data.area } : {}),
       ...(data.preferredLang !== undefined ? { preferredLang: data.preferredLang } : {}),
+      ...(data.latitude !== undefined ? { latitude: data.latitude } : {}),
+      ...(data.longitude !== undefined ? { longitude: data.longitude } : {}),
     },
     select: USER_SELECT,
   });

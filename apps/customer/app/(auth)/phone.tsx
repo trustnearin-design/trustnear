@@ -1,24 +1,48 @@
 import { useState } from 'react';
-import { View, Text, TextInput, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import {
+  View,
+  Text,
+  TextInput,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  Image,
+  Pressable,
+} from 'react-native';
 import { useRouter } from 'expo-router';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
 import { useSendOtp } from '../../src/api/auth';
 import { toE164 } from '../../src/lib/format';
 import { ApiCallError } from '../../src/api/client';
-import { BrandHero, CoralButton, MascotImage, ProgressDots } from '../../src/components/ui';
+import { CoralButton, Gradient } from '../../src/components/ui';
+import { categoryPhoto } from '../../src/lib/imagery';
 import { colors } from '../../src/theme/colors';
 
 /**
- * D2 phone screen — Sevak greeter in a plum hero, ProgressDots showing
- * step 1 of 4 (phone → otp → profile → location), country code + digits
- * input, CoralButton CTA. Trust strip lives below the input.
+ * Login screen — leads with a photographic collage of real services (what you
+ * actually get) over a plum hero, then a prominent phone input. Yes Madam /
+ * Snabbit style "show the value first" login, in TrustNear brand colours.
  */
+
+// Service photos shown in the hero collage — picked to span the catalogue
+// (cleaning, beauty, appliance, repair) so the value is obvious at a glance.
+const HERO_SLUGS = [
+  'home-cleaning',
+  'salon-women',
+  'ac-service',
+  'spa-massage',
+  'plumbing',
+  'electrical',
+];
 export default function PhoneScreen() {
   const router = useRouter();
   const [digits, setDigits] = useState('');
   const [focused, setFocused] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showReferral, setShowReferral] = useState(false);
+  const [referral, setReferral] = useState('');
   const sendOtp = useSendOtp();
 
   const valid = /^[6-9]\d{9}$/.test(digits);
@@ -32,7 +56,10 @@ export default function PhoneScreen() {
     }
     try {
       await sendOtp.mutateAsync(phone);
-      router.push({ pathname: '/(auth)/otp', params: { phone } });
+      router.push({
+        pathname: '/(auth)/otp',
+        params: { phone, ...(referral.trim() ? { referralCode: referral.trim() } : {}) },
+      });
     } catch (e) {
       if (e instanceof ApiCallError) setError(e.message);
       else setError('Something went wrong. Try again.');
@@ -52,28 +79,67 @@ export default function PhoneScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          {/* Plum gradient hero with Sevak greeter centered */}
-          <BrandHero
-            bottomGap={32}
-            rightSlot={
-              <View style={{ paddingHorizontal: 4 }}>
-                <ProgressDots total={4} activeIndex={0} inverse />
-              </View>
-            }
-          >
-            <View style={{ alignItems: 'center', paddingTop: 8 }}>
-              <MascotImage variant="greeter" tone="butter" size={120} />
-              <Text className="mt-4 font-display text-h1 text-ink-inverse">
-                Welcome to TrustNear
-              </Text>
-              <Text
-                className="mt-2 text-body text-center"
-                style={{ color: colors.brand[200], maxWidth: 320 }}
-              >
-                Aapke ghar, premium service. Pehle aapka mobile verify karein.
-              </Text>
-            </View>
-          </BrandHero>
+          {/* Photo-collage hero — shows the actual services on offer */}
+          <View style={{ overflow: 'hidden' }}>
+            <Gradient
+              colors={colors.gradient.hero}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={{ paddingBottom: 40 }}
+            >
+              <SafeAreaView edges={['top']}>
+                <View style={{ paddingHorizontal: 22, paddingTop: 8 }}>
+                  <Text
+                    style={{
+                      fontSize: 12,
+                      fontWeight: '800',
+                      letterSpacing: 2,
+                      color: colors.support[300],
+                    }}
+                  >
+                    TRUSTNEAR
+                  </Text>
+                  <Text
+                    className="font-display"
+                    style={{
+                      marginTop: 8,
+                      fontSize: 30,
+                      fontWeight: '800',
+                      color: '#FFFFFF',
+                      lineHeight: 36,
+                      letterSpacing: -0.5,
+                    }}
+                  >
+                    Verified pros for{'\n'}every home service
+                  </Text>
+                  <Text style={{ marginTop: 8, fontSize: 14, color: colors.brand[200] }}>
+                    Background-checked, fixed prices, in minutes.
+                  </Text>
+                </View>
+
+                {/* 2-row photo strip */}
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={{ paddingHorizontal: 22, paddingTop: 18, gap: 10 }}
+                >
+                  {HERO_SLUGS.map((slug) => (
+                    <Image
+                      key={slug}
+                      source={{ uri: categoryPhoto(slug) }}
+                      style={{
+                        width: 104,
+                        height: 128,
+                        borderRadius: 16,
+                        backgroundColor: 'rgba(255,255,255,0.08)',
+                      }}
+                      resizeMode="cover"
+                    />
+                  ))}
+                </ScrollView>
+              </SafeAreaView>
+            </Gradient>
+          </View>
 
           {/* Form sheet — floats above hero with rounded top */}
           <View
@@ -86,9 +152,9 @@ export default function PhoneScreen() {
               paddingTop: 24,
             }}
           >
-            <Text className="font-display text-h2 text-ink">Enter your mobile number</Text>
+            <Text className="font-display text-h2 text-ink">Log in or sign up</Text>
             <Text className="mt-2 text-body text-ink-muted">
-              We&apos;ll send a 6-digit code to verify it&apos;s really you.
+              Apna mobile number daalein — hum ek 6-digit code bhejenge.
             </Text>
 
             <View className="mt-6">
@@ -143,6 +209,38 @@ export default function PhoneScreen() {
                 loading={sendOtp.isPending}
               />
             </View>
+
+            {/* Have a referral code? */}
+            {showReferral ? (
+              <View className="mt-4">
+                <Text className="mb-2 text-overline uppercase text-ink-subtle">Referral code</Text>
+                <View className="flex-row items-center rounded-card border-2 border-border bg-surface px-4 py-3">
+                  <Ionicons name="gift" size={18} color={colors.accent[700]} />
+                  <TextInput
+                    value={referral}
+                    onChangeText={(t) => setReferral(t.toUpperCase().replace(/\s/g, ''))}
+                    placeholder="e.g. RAHUL1234"
+                    placeholderTextColor={colors.ink.subtle}
+                    autoCapitalize="characters"
+                    autoCorrect={false}
+                    maxLength={20}
+                    className="ml-3 flex-1 text-body text-ink"
+                    style={{ fontWeight: '700', letterSpacing: 1 }}
+                  />
+                </View>
+              </View>
+            ) : (
+              <Pressable
+                onPress={() => setShowReferral(true)}
+                hitSlop={8}
+                className="mt-4 flex-row items-center justify-center"
+              >
+                <Ionicons name="gift-outline" size={16} color={colors.brand[700]} />
+                <Text className="ml-1.5 text-small font-display text-brand">
+                  Have a referral code?
+                </Text>
+              </Pressable>
+            )}
 
             <Text className="mt-5 text-center text-small text-ink-subtle">
               By continuing you agree to{' '}
